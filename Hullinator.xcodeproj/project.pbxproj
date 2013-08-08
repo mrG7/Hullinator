@@ -1,0 +1,288 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		9F08B95317B1388F00E1DC8D /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9F08B95217B1388F00E1DC8D /* Carbon.framework */; };
+		9F08B98A17B1668800E1DC8D /* Intersectable.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9F08B98917B1668800E1DC8D /* Intersectable.cpp */; };
+		9FD5327217AEDEFB004D5BEE /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9FD5327117AEDEFB004D5BEE /* main.cpp */; };
+		9FD5328517AEDFC0004D5BEE /* GLUtil.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9FD5327B17AEDFC0004D5BEE /* GLUtil.cpp */; };
+		9FD5328717AEDFC0004D5BEE /* StdWilUtil.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9FD5328017AEDFC0004D5BEE /* StdWilUtil.cpp */; };
+		9FD5328817AEDFC0004D5BEE /* Vectorf.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9FD5328217AEDFC0004D5BEE /* Vectorf.cpp */; };
+		9FD5328917AEDFC0004D5BEE /* MersenneTwister.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9FD5328417AEDFC0004D5BEE /* MersenneTwister.cpp */; };
+		9FD5328C17AEDFE8004D5BEE /* GLUT.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9FD5328B17AEDFE8004D5BEE /* GLUT.framework */; };
+		9FD5328E17AEDFEC004D5BEE /* OpenGL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9FD5328D17AEDFEC004D5BEE /* OpenGL.framework */; };
+		9FD5329317AEE64E004D5BEE /* AABB.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9FD5329217AEE64E004D5BEE /* AABB.cpp */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		9FD5326C17AEDEFB004D5BEE /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		9F08B95217B1388F00E1DC8D /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
+		9F08B98917B1668800E1DC8D /* Intersectable.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Intersectable.cpp; sourceTree = "<group>"; };
+		9FD2201117B2FAC700969C27 /* Message.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Message.h; sourceTree = "<group>"; };
+		9FD5326E17AEDEFB004D5BEE /* Hullinator */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Hullinator; sourceTree = BUILT_PRODUCTS_DIR; };
+		9FD5327117AEDEFB004D5BEE /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+		9FD5327A17AEDFC0004D5BEE /* Geometry.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Geometry.h; sourceTree = "<group>"; };
+		9FD5327B17AEDFC0004D5BEE /* GLUtil.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = GLUtil.cpp; sourceTree = "<group>"; };
+		9FD5327C17AEDFC0004D5BEE /* GLUtil.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GLUtil.h; sourceTree = "<group>"; };
+		9FD5327F17AEDFC0004D5BEE /* StdWilUtil.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = StdWilUtil.h; sourceTree = "<group>"; };
+		9FD5328017AEDFC0004D5BEE /* StdWilUtil.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = StdWilUtil.cpp; sourceTree = "<group>"; };
+		9FD5328117AEDFC0004D5BEE /* Vectorf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Vectorf.h; sourceTree = "<group>"; };
+		9FD5328217AEDFC0004D5BEE /* Vectorf.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Vectorf.cpp; sourceTree = "<group>"; };
+		9FD5328317AEDFC0004D5BEE /* MersenneTwister.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MersenneTwister.h; sourceTree = "<group>"; };
+		9FD5328417AEDFC0004D5BEE /* MersenneTwister.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MersenneTwister.cpp; sourceTree = "<group>"; };
+		9FD5328B17AEDFE8004D5BEE /* GLUT.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GLUT.framework; path = System/Library/Frameworks/GLUT.framework; sourceTree = SDKROOT; };
+		9FD5328D17AEDFEC004D5BEE /* OpenGL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGL.framework; path = System/Library/Frameworks/OpenGL.framework; sourceTree = SDKROOT; };
+		9FD5328F17AEE03B004D5BEE /* Hull.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Hull.h; sourceTree = "<group>"; };
+		9FD5329017AEE3ED004D5BEE /* Intersectable.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Intersectable.h; sourceTree = "<group>"; };
+		9FD5329117AEE638004D5BEE /* AABB.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AABB.h; sourceTree = "<group>"; };
+		9FD5329217AEE64E004D5BEE /* AABB.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AABB.cpp; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		9FD5326B17AEDEFB004D5BEE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9F08B95317B1388F00E1DC8D /* Carbon.framework in Frameworks */,
+				9FD5328E17AEDFEC004D5BEE /* OpenGL.framework in Frameworks */,
+				9FD5328C17AEDFE8004D5BEE /* GLUT.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		9F08B98817B1540200E1DC8D /* geom */ = {
+			isa = PBXGroup;
+			children = (
+				9FD5327A17AEDFC0004D5BEE /* Geometry.h */,
+				9FD5328F17AEE03B004D5BEE /* Hull.h */,
+				9FD5329017AEE3ED004D5BEE /* Intersectable.h */,
+				9F08B98917B1668800E1DC8D /* Intersectable.cpp */,
+				9FD5329117AEE638004D5BEE /* AABB.h */,
+				9FD5329217AEE64E004D5BEE /* AABB.cpp */,
+			);
+			name = geom;
+			sourceTree = "<group>";
+		};
+		9FD5326517AEDEFB004D5BEE = {
+			isa = PBXGroup;
+			children = (
+				9F08B95217B1388F00E1DC8D /* Carbon.framework */,
+				9FD5328D17AEDFEC004D5BEE /* OpenGL.framework */,
+				9FD5328B17AEDFE8004D5BEE /* GLUT.framework */,
+				9FD5327017AEDEFB004D5BEE /* Hullinator */,
+				9FD5326F17AEDEFB004D5BEE /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		9FD5326F17AEDEFB004D5BEE /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9FD5326E17AEDEFB004D5BEE /* Hullinator */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		9FD5327017AEDEFB004D5BEE /* Hullinator */ = {
+			isa = PBXGroup;
+			children = (
+				9F08B98817B1540200E1DC8D /* geom */,
+				9FD5328A17AEDFC8004D5BEE /* util */,
+				9FD5327117AEDEFB004D5BEE /* main.cpp */,
+			);
+			path = Hullinator;
+			sourceTree = "<group>";
+		};
+		9FD5328A17AEDFC8004D5BEE /* util */ = {
+			isa = PBXGroup;
+			children = (
+				9FD2201117B2FAC700969C27 /* Message.h */,
+				9FD5327C17AEDFC0004D5BEE /* GLUtil.h */,
+				9FD5327B17AEDFC0004D5BEE /* GLUtil.cpp */,
+				9FD5327F17AEDFC0004D5BEE /* StdWilUtil.h */,
+				9FD5328017AEDFC0004D5BEE /* StdWilUtil.cpp */,
+				9FD5328117AEDFC0004D5BEE /* Vectorf.h */,
+				9FD5328217AEDFC0004D5BEE /* Vectorf.cpp */,
+				9FD5328317AEDFC0004D5BEE /* MersenneTwister.h */,
+				9FD5328417AEDFC0004D5BEE /* MersenneTwister.cpp */,
+			);
+			name = util;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		9FD5326D17AEDEFB004D5BEE /* Hullinator */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9FD5327717AEDEFB004D5BEE /* Build configuration list for PBXNativeTarget "Hullinator" */;
+			buildPhases = (
+				9FD5326A17AEDEFB004D5BEE /* Sources */,
+				9FD5326B17AEDEFB004D5BEE /* Frameworks */,
+				9FD5326C17AEDEFB004D5BEE /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Hullinator;
+			productName = Hullinator;
+			productReference = 9FD5326E17AEDEFB004D5BEE /* Hullinator */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		9FD5326617AEDEFB004D5BEE /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0460;
+				ORGANIZATIONNAME = "William Sherif";
+			};
+			buildConfigurationList = 9FD5326917AEDEFB004D5BEE /* Build configuration list for PBXProject "Hullinator" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = 9FD5326517AEDEFB004D5BEE;
+			productRefGroup = 9FD5326F17AEDEFB004D5BEE /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				9FD5326D17AEDEFB004D5BEE /* Hullinator */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		9FD5326A17AEDEFB004D5BEE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9FD5327217AEDEFB004D5BEE /* main.cpp in Sources */,
+				9FD5328517AEDFC0004D5BEE /* GLUtil.cpp in Sources */,
+				9FD5328717AEDFC0004D5BEE /* StdWilUtil.cpp in Sources */,
+				9FD5328817AEDFC0004D5BEE /* Vectorf.cpp in Sources */,
+				9FD5328917AEDFC0004D5BEE /* MersenneTwister.cpp in Sources */,
+				9FD5329317AEE64E004D5BEE /* AABB.cpp in Sources */,
+				9F08B98A17B1668800E1DC8D /* Intersectable.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		9FD5327517AEDEFB004D5BEE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		9FD5327617AEDEFB004D5BEE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		9FD5327817AEDEFB004D5BEE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		9FD5327917AEDEFB004D5BEE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		9FD5326917AEDEFB004D5BEE /* Build configuration list for PBXProject "Hullinator" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9FD5327517AEDEFB004D5BEE /* Debug */,
+				9FD5327617AEDEFB004D5BEE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9FD5327717AEDEFB004D5BEE /* Build configuration list for PBXNativeTarget "Hullinator" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9FD5327817AEDEFB004D5BEE /* Debug */,
+				9FD5327917AEDEFB004D5BEE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 9FD5326617AEDEFB004D5BEE /* Project object */;
+}

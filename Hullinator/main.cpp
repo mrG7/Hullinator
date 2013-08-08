@@ -1,0 +1,609 @@
+//
+//  Hullinator
+//
+//  Created by William Sherif on 8/4/13.
+//
+/*
+
+  https://github.com/superwills/Hullinator
+  Convex hull creation and intersection (and rays & triangles)
+  version 1.0.0, Aug 7, 2013 649p
+
+  Copyright (C) 2013 William Sherif
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+
+  William Sherif
+  will.sherif@gmail.com
+
+*/
+
+#ifdef _WIN32
+#include <stdlib.h> // MUST BE BEFORE GLUT ON WINDOWS
+#include <gl/glut.h>
+#else
+#include <GLUT/glut.h>
+#include <OpenGL/gl.h>
+#include <OpenGL/glu.h>
+#include <Carbon/Carbon.h>
+#endif
+#include "GLUtil.h"
+#include "StdWilUtil.h"
+#include "Vectorf.h"
+#include "Geometry.h"
+#include "Hull.h"
+#include <vector>
+using namespace std;
+
+int w=768, h=768 ;// window width and height.
+#include "Message.h"
+
+static float mx, my, sbd=100.f,ptSize=1.f,lineWidth=1.f ;
+bool showOriginalPoints=0;
+vector<VertexPC> pointCloud1,pointCloud2 ;
+Vector4f lightPos0, lightPos1, lightPos2, lightPos3 ;
+Frustum frustum(w,h) ;
+int pointsPerCloud = 35 ;
+
+const char* ModeName[] = {
+  "Hull-hull",
+  "Hull-tri",
+  "Tri-tri",
+  "Plane-plane-plane"
+} ;
+enum Mode{
+  HullHull, HullTri, TriTri, PlanePlanePlane
+  
+} ;
+int mode = 0 ;
+
+Hull hull1,hull2 ;
+Triangle tri1(0,0,0), tri2(0,0,0),
+planeTri1(0,0,0),planeTri2(0,0,0),planeTri3(0,0,0) ; // huge tris used as planes
+
+void regenHulls()
+{
+  hull1.clear(), hull2.clear() ;
+  
+  // Add all the points to the bound.
+  for( int i = 0 ; i < pointCloud1.size() ; i++ ) {
+    hull1.addPtToBound( pointCloud1[i].pos ) ;
+  }
+  for( int i = 0 ; i < pointCloud2.size() ; i++ ) {
+    hull2.addPtToBound( pointCloud2[i].pos ) ;
+  }
+  
+  hull1.initFromExtremePts() ;
+  //hull1.drawDebug( Black ) ;
+  hull1.expandToContainAllPts() ;
+  
+  hull2.initFromExtremePts() ;
+  //hull2.drawDebug( Black ) ;
+  hull2.expandToContainAllPts() ;
+  
+}
+
+void newPointClouds(){
+  pointCloud1.clear();
+  pointCloud2.clear();
+  Vector3f c1=Vector3f::random( 0, 15 ), c2=Vector3f::random(-15,0) ;
+  for( int i = 0 ; i < pointsPerCloud ; i++ )
+  {
+    pointCloud1.push_back( VertexPC( c1+ Vector3f::random(-10,10), Vector4f::random() ) ) ;
+    pointCloud2.push_back( VertexPC( c2+ Vector3f::random(-10,10), Vector4f::random() ) ) ;
+  }
+  regenHulls() ;
+}
+
+void shiftPointClouds() {
+  for( int i = 0 ; i < pointCloud1.size() ; i++ ) {
+    pointCloud1[i].pos += Vector3f::random(-.2,.2) ;
+  }
+  for( int i = 0 ; i < pointCloud2.size() ; i++ ) {
+    pointCloud2[i].pos += Vector3f::random(-.2,.2) ;
+  }
+  regenHulls() ;
+}
+
+void init() // Called before main loop to set up the program
+{
+  newPointClouds() ;
+  
+  ptSize = 16.f;
+  glPointSize( ptSize ) ;
+  
+  msg( "mode", "\"Hullo\", I am Hullinator." ) ;
+  msg( "instr1", "(1) to switch modes. (2) for wireframe (toggle). (h) to for help." ) ;
+  
+}
+
+void help()
+{
+  switch( mode )
+  {
+    case Mode::HullHull:
+      msg( "mode", "Hull-Hull mode.", Gray ) ;
+      msg( "instr1", "(m) makes new point clouds.  +/- to change # pts per cloud." ) ;
+      msg( "instr2", "holding (r) jiggles the clouds. (e) shows the original points that made up the hull." ) ;
+      //msg( "instr2", ".", 10.f ) ;
+      break;
+    case Mode::HullTri:
+      msg( "mode", "hull-tri mode.", Gray ) ;
+      msg( "instr1", "left/right arrows to spin tri. Also (m), (+/-)" ) ;
+      break;
+    case Mode::TriTri:
+      msg( "mode", "Tri-tri mode.", Gray ) ;
+      msg( "instr1", "left/right arrows to spin tris. (2) for wireframe." ) ;
+      break;
+    case Mode::PlanePlanePlane:
+      msg( "mode", "plane-plane-plane mode.", Gray ) ;
+      msg( "instr1", "Intn is yellow pt.  CTRL+Click to fire rays at the planes." ) ;
+      break;  
+  }
+  
+  static bool firstHelp=1;
+  if( firstHelp )
+  {
+    msg( "instr3", "CTRL+CLICK to fire rays. (c) to clear those rays." ) ;
+    firstHelp=0;
+  }
+}
+
+KeyMap keyStates ;
+
+bool IS_KEYDOWN( uint16_t vKey )
+{
+  // http://stackoverflow.com/questions/11466294/getting-keyboard-state-using-getkeys-function
+  uint8_t index = vKey / 32 ;
+  uint8_t shift = vKey % 32 ;
+  return keyStates[index].bigEndianValue & (1 << shift) ;
+}
+
+void hullHullTest()
+{
+  // This is a unit test, so make sure it works both ways
+  if( hull1.intersectsHull( hull2 ) )  hull1.drawDebug( Red ) ;
+  else  hull1.drawDebug( Vector4f(0,0,1,0.75) ) ;
+
+  if( hull2.intersectsHull( hull1 ) )  hull2.drawDebug( Purple ) ;
+  else  hull2.drawDebug( Vector4f(0,1,0,0.75) ) ;
+  if( showOriginalPoints )
+  {
+    hull1.drawDebugOriginalPts() ;
+    hull2.drawDebugOriginalPts() ;
+  }
+}
+
+void hullTriTest()
+{
+  static float ang = 0.f;
+  if( IS_KEYDOWN( kVK_RightArrow ) )
+    ang += 0.001f ;
+  if( IS_KEYDOWN( kVK_LeftArrow ) )
+    ang -= 0.001f ;
+  
+  Matrix3f rot = Matrix3f::rotationY( ang ) ; // * Matrix3f::rotationX( M_PI- ang ) ;
+  tri1 = Triangle( rot*Vector3f( -20,0,5 ), rot*Vector3f( 20,0,5 ), rot*Vector3f( 0,20,-5 ) ) ;
+  
+  if( hull1.intersectsTri( tri1 ) ) {
+    addDebugTriSolid( tri1, Red ) ;
+    hull1.drawDebug( Vector4f(1,0,1,0.75) ) ;
+  }
+  else {
+    addDebugTriSolid( tri1, Blue ) ;
+    hull1.drawDebug( Vector4f(0,0,1,0.75) ) ;
+  }
+}
+
+void planePlanePlaneTest()
+{
+  static float a = 0.f;
+  a += 0.001f;
+  
+  // very large triangles (planes essentially)
+  planeTri1 = Triangle( Vector3f( -500, -500, 0* sinf(a) ), Vector3f( 500, -500, 25 * sinf(a) ), Vector3f( 0, 500, -30* sinf(a) ) ) ;
+  addDebugTriSolid( planeTri1, Vector4f( 1,0,0,0.5f ) ) ;
+  
+  planeTri2 = Triangle( Vector3f( -40, -500, 500 ), Vector3f( 50, -500, -500 ), Vector3f( 5, 500, -10 ) ) ;
+  addDebugTriSolid( planeTri2, Vector4f( 0,0,1,0.5f ) ) ;
+
+  planeTri3 = Triangle( Vector3f( -500, 4, 300 ), Vector3f( 500, 7, 500 ), Vector3f( 0, 12, -500 ) ) ;
+  addDebugTriSolid( planeTri3, Vector4f( 0,1,0,0.5f ) ) ;
+  
+  // Test plane-plane-plane intn
+  Vector3f pt = Plane::getIntersection( planeTri1.plane, planeTri2.plane, planeTri3.plane ) ;
+  addDebugPoint( pt, Yellow ) ; // the startpos of the ray is the intn pt of the 3 planes.
+
+  // the direction vector i want to run a line along is along the intersection line
+  // of 2 of the planes.
+  Vector3f dir = planeTri1.plane.normal.cross( planeTri2.plane.normal ).normalize() ;
+  addDebugLine( pt + dir*-500.f, pt + dir*500.f, Yellow ) ; // draw ray really long along intn line
+  
+}
+
+void triTriTest()
+{
+  static float ang = 0.f;
+  if( IS_KEYDOWN( kVK_RightArrow ) )
+    ang += 0.001f ;
+  if( IS_KEYDOWN( kVK_LeftArrow ) )
+    ang -= 0.001f ;
+  
+  Matrix3f rot = Matrix3f::rotationY( ang ) ;
+  tri1 = Triangle( rot*Vector3f( -20,0,5 ), rot*Vector3f( 20,0,5 ), rot*Vector3f( 0,20,-5 ) ) ;
+  
+  rot = Matrix3f::rotationX( ang ) ;
+  //rot = Matrix3f::rotation( rot*Vector3f(1,0,0), ang ) ;
+  tri2 = Triangle( rot*Vector3f( -20,10,20 ), rot*Vector3f( 20,10,20 ), rot*Vector3f( -10,10,-10 ) ) ;
+  
+  Ray ray ;
+  if( tri1.intersectsTri( tri2,ray ) )
+  {
+    addDebugTriSolid( tri1, Purple ) ;
+    addDebugTriSolid( tri2, Yellow ) ;
+    addDebugRay( ray, Red ) ;
+  }
+  else
+  {
+    addDebugTriSolid( tri1, Blue ) ;
+    addDebugTriSolid( tri2, Green ) ;
+  }
+}
+
+
+void draw()
+{
+  // FIRST I'LL DO THE PROCESSING HERE
+  GetKeys(keyStates) ;
+  
+  // Which test mode are you running?
+  switch( mode )
+  {
+  case HullHull:
+    hullHullTest() ;
+    break;
+    
+  case HullTri:
+    hullTriTest() ;
+    break ;
+    
+  case TriTri:
+    triTriTest() ;
+    break ;
+    
+  case PlanePlanePlane:
+    planePlanePlaneTest() ;
+    break ;
+  default:
+    error( "INVALID MODE %d", mode ) ;
+    break ;
+  }
+  
+  glEnable( GL_DEPTH_TEST ) ;
+  glClearColor( 0.1, 0.1, 0.1, 0.1 ) ;
+  glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT ) ;
+
+  glEnable( GL_BLEND ) ;
+  glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA ) ;
+  
+  //glCullFace( GL_BACK ) ;//backface back face culling
+  //glEnable( GL_CULL_FACE ) ;
+  
+  glEnable( GL_COLOR_MATERIAL ) ;
+  
+  glViewport( 0, 0, w, h ) ;
+  glMatrixMode( GL_PROJECTION ) ;
+  glLoadIdentity();
+  gluPerspective( 45.0, 1.0, 0.5, 1000.0 ) ;
+  frustum.persp( RADIANS(45.f), 1.f, 0.5f, 1000.f ) ;
+  
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+  glTranslatef( 0, 0, -sbd ) ;
+  glRotatef( my, 1, 0, 0 ) ;
+  glRotatef( mx, 0, 1, 0 ) ;
+  
+  // Build the same matriix backwards with inverted values to get the phsyical frustum.
+  Matrix4f mvm ;
+  mvm = mvm * Matrix3f::rotationY( RADIANS(-mx) ) ;
+  mvm = mvm * Matrix3f::rotationX( RADIANS(-my) ) ;
+  mvm = mvm * Matrix4f::Translation( Vector3f(0,0,sbd) ) ;
+  
+  frustum.orient( mvm ) ;
+  //frustum.drawDebug() ;
+    
+  glLineWidth( 1.f ) ;
+  drawAxisLines() ;
+  glLineWidth( lineWidth ) ;
+  
+  // LIGHTS, 
+  glEnable( GL_LIGHTING ) ;
+  glEnable( GL_LIGHT0 ) ;
+  glEnable( GL_LIGHT1 ) ;
+  //glEnable( GL_LIGHT2 ) ;
+  //glEnable( GL_LIGHT3 ) ;
+  
+  float ld = 50.f ;
+  lightPos0 = Vector4f(  ld,  ld,  ld, 1 ) ;
+  lightPos1 = Vector4f( -ld,  ld, -ld, 1 ) ;
+  lightPos2 = Vector4f(   0,  ld,   0, 1 ) ;
+  lightPos3 = Vector4f( -ld,   0,   0, 1 ) ;
+
+  glLightfv( GL_LIGHT0, GL_POSITION, &lightPos0.x ) ;
+  glLightfv( GL_LIGHT1, GL_POSITION, &lightPos1.x ) ;
+  glLightfv( GL_LIGHT2, GL_POSITION, &lightPos2.x ) ;
+  glLightfv( GL_LIGHT3, GL_POSITION, &lightPos3.x ) ;
+  
+  float white[4] = {1,1,1,1};
+  glLightfv( GL_LIGHT1, GL_DIFFUSE, white ) ;
+  glLightfv( GL_LIGHT2, GL_DIFFUSE, white ) ;
+  glLightfv( GL_LIGHT3, GL_DIFFUSE, white ) ;
+  Vector4f spec(1,1,1,75) ;
+  //glMaterialfv( GL_FRONT_AND_BACK, GL_SPECULAR, &spec.x ) ;
+  //glMaterialf( GL_FRONT_AND_BACK, GL_SHININESS, spec.w ) ;
+  
+  drawDebug() ;
+  msgDraw() ;
+  
+  glutSwapBuffers();
+}
+
+// Called every time a window is resized to resize the projection matrix
+void resize( int newWidth, int newHeight )
+{
+  w = newWidth ;
+  h = newHeight ;
+}
+
+static int lastX=0, lastY=0 ;
+static int mmode=0;
+void mouseMotion( int x, int y )
+{
+  int dx = x-lastX, dy=y-lastY ;
+  
+  // LMB
+  if( mmode == GLUT_LEFT_BUTTON )
+  {
+    mx += dx, my += dy ;
+  }
+  else if( mmode == GLUT_RIGHT_BUTTON )
+  {
+    // dolly
+    sbd +=0.1*(-dx+dy) ;
+    clamp( sbd, 10, 1000 ) ;
+  }
+  
+  lastX=x,lastY=y;
+}
+
+bool testHitHull( const Hull& hull, const Ray& ray )
+{
+  float t1,t2;
+  bool hitHull = hull.intersectsRay( ray, t1, t2 ) ;
+  if( hitHull )
+  {
+    //printf( "hit t1=%f, t2=%f\n", t1, t2 ) ;
+    addPermDebugPoint( ray.at01( t1 ), Yellow ) ;
+    addPermDebugPoint( ray.at01( t2 ), Red ) ;
+  }
+  return hitHull ;
+}
+
+bool testHitTri( const Triangle& tri, const Ray& ray )
+{
+  Vector3f triPt ;
+  bool hitTri = tri.intersectsRay( ray, triPt ) ;
+  if( hitTri )
+    addPermDebugPoint( triPt, Red ) ;
+  return hitTri ;
+}
+
+bool testHitPlane( const Plane& plane, const Ray& ray )
+{
+  Vector3f pt ;
+  bool hitPlane = plane.intersectsRay( ray, pt ) ;
+  if( hitPlane )
+    addPermDebugPoint( pt, Red ) ;
+  return hitPlane ;
+}
+
+// 0 for LMB, 2 for RMB
+// state==0 is down, 1 is up
+// (glutGetModifiers() & GLUT_ACTIVE_CTRL) to test if ctrl is down
+// (glutGetModifiers() & GLUT_ACTIVE_ALT), (glutGetModifiers() & GLUT_ACTIVE_SHIFT)
+void mouse( int button, int state, int x, int y )
+{
+  //printf( "%d %d %d %d\n", button,state,x,h-y ) ;
+  
+  lastX = x ;
+  lastY = y ;
+  mmode=button;
+  
+  if( !button && !state && (glutGetModifiers() & GLUT_ACTIVE_CTRL) )
+  {
+    Ray ray = frustum.getRay( h-y, x ) ; //invert the y
+    
+    bool rayHits=0;
+    // Which test mode are you running?
+    switch( mode )
+    {
+    case HullHull:
+      // both hull1 and hull2 are visible
+      rayHits |= testHitHull( hull1, ray ) ;
+      rayHits |= testHitHull( hull2, ray ) ;
+      break;
+      
+    case HullTri:
+      rayHits |= testHitHull( hull1, ray ) ;
+      rayHits |= testHitTri( tri1, ray ) ;
+      break ;
+      
+    case TriTri:
+      rayHits |= testHitTri( tri1, ray ) ;
+      rayHits |= testHitTri( tri2, ray ) ;
+      break ;
+      
+    case PlanePlanePlane:
+      rayHits |= testHitPlane( planeTri1.plane, ray ) ;
+      rayHits |= testHitPlane( planeTri2.plane, ray ) ;
+      rayHits |= testHitPlane( planeTri3.plane, ray ) ;
+      break ;
+    
+    }
+
+    if( rayHits )
+      addPermDebugRay( ray, Red, Red ) ;
+    else
+      addPermDebugRay( ray, Yellow, Yellow ) ;
+  }
+  
+}
+
+void keyboard( unsigned char key, int x, int y )
+{
+  switch( key )
+  {
+  case '1':
+    cycleFlag( mode, 0, Mode::PlanePlanePlane ) ;
+    help() ;
+    break ;
+  case '!':
+    decycleFlag( mode, 0, Mode::PlanePlanePlane ) ;
+    help() ;
+    break ;
+    
+  case '2':
+    {
+    int pMode[2];
+    glGetIntegerv( GL_POLYGON_MODE, pMode ) ;
+    if( pMode[0] == GL_FILL ) {
+      glPolygonMode( GL_FRONT_AND_BACK, GL_LINE ) ;
+      msg( "lw", makeString( "(l/L)inewidth (%.0f)", lineWidth ) );
+    }
+    else  glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ) ;
+    }
+    break ;
+    
+  case '=':
+  case '+':
+    pointsPerCloud++;
+    msg( "ptspercloud", makeString( "%d pts", pointsPerCloud ), w-100, 40, 4.f ) ;
+    goto NEWPOINTCLOUDS ; // goto programming revival.
+    break ;
+    
+  case '-':
+  case '_':
+    pointsPerCloud--;
+    if( pointsPerCloud < 0 ) pointsPerCloud = 0 ;
+    msg( "ptspercloud", makeString( "%d pts", pointsPerCloud ), w-100, 40, 4.f ) ;    
+    goto NEWPOINTCLOUDS ; // goto programming revival.
+    break; 
+  
+  case 'c':
+  CLEAR:
+    debugPointsPerm.clear() ;
+    debugLinesPerm.clear() ;
+    debugTrisPerm.clear();
+    break ;
+    
+  case 'e':
+    showOriginalPoints = !showOriginalPoints;
+    if( showOriginalPoints )
+      msg( "lw", makeString( "(p/P)ointsize (%.0f)", ptSize ) ) ;
+    break ;
+    
+  case 'h':
+    help() ;
+    break ;
+  
+  case 'l':
+    lineWidth++;
+    msg( "lw", makeString( "(l/L)inewidth (%.0f)", lineWidth ) );
+    glLineWidth( lineWidth ) ;
+    break ;
+  case 'L':
+    lineWidth--;
+    if( lineWidth < 1.f ) lineWidth = 1.f ;
+    msg( "lw", makeString( "(l/L)inewidth (%.0f)", lineWidth ) );
+    glLineWidth( lineWidth ) ;
+    break ;
+  
+  case 'm':
+  NEWPOINTCLOUDS:
+    newPointClouds() ;
+    goto CLEAR ; // goto programming revival.
+    break ;
+  
+  case 'p':
+    ptSize++;
+    msg( "lw", makeString( "(p/P)ointsize (%.0f)", ptSize ) ) ;
+    glPointSize( ptSize ) ;
+    break ;
+  case 'P':
+    ptSize--;
+    if( ptSize < 1.f )  ptSize=1.f ;
+    msg( "lw", makeString( "(p/P)ointsize (%.0f)", ptSize ) ) ;
+    glPointSize( ptSize ) ;
+    break ;
+  
+  case 'r':
+    shiftPointClouds() ;
+    goto CLEAR ; // goto programming revival.
+    break ;
+
+  case 27:
+    exit(0);
+    break;
+    
+  default:
+    break;
+  }
+}
+
+int main( int argc, char **argv )
+{
+  glutInit( &argc, argv ) ; // Initializes glut
+
+  glutInitDisplayMode( GLUT_DOUBLE | GLUT_DEPTH | GLUT_RGBA ) ;
+  glutInitWindowSize( w, h ) ;
+  glutInitWindowPosition( 0, 0 ) ;
+  glutCreateWindow( "The Hullinator" ) ;
+  glutReshapeFunc( resize ) ;
+  glutDisplayFunc( draw ) ;
+  glutIdleFunc( draw ) ;
+  
+  glutMotionFunc( mouseMotion ) ;
+  glutMouseFunc( mouse ) ;
+  
+  glutKeyboardFunc( keyboard ) ;
+  init();
+
+  glutMainLoop();
+  return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
