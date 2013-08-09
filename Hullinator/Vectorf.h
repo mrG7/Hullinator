@@ -5,7 +5,12 @@
 
 #define _USE_MATH_DEFINES
 #include <math.h>
-#import "StdWilUtil.h"
+#include "StdWilUtil.h"
+
+#ifdef WIN32
+#include <float.h>
+#define isnan _isnan
+#endif
 
 // See https://gist.github.com/superwills/6159033
 // for the matrix characters
@@ -398,8 +403,6 @@ union Vector3f
   Vector3f( const Vector2f& v ):x(v.x),y(v.y),z(0.f){}
   Vector3f( float ix, float iy, float iz ):x(ix),y(iy),z(iz){}
   Vector3f( float iv ):x(iv),y(iv),z(iv){}
-  
-  static Vector3f UnitVectors[ 3 ] ;
   
   // macho linker errors
   static inline Vector3f random() { return Vector3f( randFloat(), randFloat(), randFloat() ) ;  }
@@ -2917,178 +2920,6 @@ inline RectF operator%( const Vector2f& percentage, RectF rect ) {
 }
 
 
-
-
-
-
-enum AnimationCycles
-{
-  NoCycles,
-  YesCycles
-} ;
-enum AnimationRocks
-{
-  NoRocks,
-  YesRocks
-} ;
-
-//1D bezier spline.
-struct Bezier
-{
-  vector<double> points ;
-  double startT, responseLength ;
-  bool fwd ; // currenlty in fwd or backward transition state
-  bool cycles ; // cycle when finished or CLAMP.
-  bool rocks ;  // when cycling, ROCKS back and forth, OR just cycles fwd,fwd,fwd
-  
-  void defaults(){
-    startT=(0.0),responseLength=(1.0);
-    fwd=1;
-    // BY DEFAULT it will cycle and rock.
-    cycles=1;
-    rocks=1;
-  }
-  
-  // Can't construct a bezier without these 4 pts man.
-  Bezier( double A, double B, double C, double D )
-  {
-    defaults();
-    points.push_back( A ) ;
-    points.push_back( B ) ;
-    points.push_back( C ) ;
-    points.push_back( D ) ;
-  }
-
-  // For constructing just a bezier curve, but you cannot use it until some
-  // interaction takes place (so you don't know the start time and end time yet).
-  Bezier( const Vector4f& coeff ) : Bezier( coeff.x,coeff.y,coeff.z,coeff.w ) { }
-  
-  Bezier( double A, double B, double C, double D, double iStartT, double iResponseLen ) :
-    Bezier( A,B,C,D ) {
-    startT = iStartT ;
-    responseLength = iResponseLen ;
-  }
-  
-  Bezier( double A, double B, double C, double D, double iStartT, double iResponseLen, AnimationCycles iCycles, AnimationRocks iRocks ) :
-    Bezier( A,B,C,D ) {
-    startT = iStartT ;
-    responseLength = iResponseLen ;
-    cycles = iCycles ;
-    rocks  = iRocks ;
-  }
-  
-  inline bool isEnded( double t ) {
-    return t - startT >= responseLength ;
-  }
-private:
-  // straight eval the bez spline for a t.
-  inline float eval( double t )
-  {
-    double r = 0 ;
-    int n = (int)points.size()-1;
-    for( int i = 0 ; i < points.size() ; i++ )
-      r += points[i] * binomial( n, i )   *   pow( t, i )   *   pow( 1-t, n-i ) ;
-    return r ;
-  }
-
-public:
-  // t will be converted to a value between 0 and 1.
-  // you will get a result between 0 and 1.
-  inline float operator()( double t )
-  {
-    // change t so that startT is accounted for as t=0
-    t-=startT;
-    
-    if( t > responseLength )
-    {
-      // we have finished a cycle.
-      if( ! cycles )  return points[ points.size()-1 ]; // clamp at last pt value.
-      
-      // Now we can either modify startT
-      startT += responseLength ;
-      // and take t back into range (just this time)
-      t -= responseLength ;
-      // and flip fwd, if it rocks between fwd/backwd
-      if( rocks )
-        fwd = !fwd ;
-      
-      // OR we can fmodf t so that it is between [0, responseLength)
-      //t = fmodf( t, responseLength ) ;
-      // and increment some kind of period cycle counter so that we don't flip FWD every time
-      // OR use even/odd results of division,   t/responseLength is even on FWD cycles, t/responseLength is ODD on backcycles.
-      //fwd = ((int)(t/responseLength))%2 ;
-    }
-    
-    // Now make t periodic in the response length
-    
-    t/=responseLength; // normalizes t so that t is between 0 and 1.
-    
-    //return eval( t ) ;
-    return fwd?eval( t ):eval( 1.-t ) ;
-  }
-  
-  // [] walks backwards
-  //inline float operator[]( double t ) {
-  //  t-=startT;
-  //  t/=responseLength; // t is now between 0 and 1
-  //  return eval( 1.-t ) ; // t now between 1 and 0.
-  //}
-
-} ;
-
-
-
-// A Transition is actually just a type of Bezier wrapper.
-// Provides
-template <typename T>
-struct BezierTransition : public Bezier
-{
-  // Could also accept a generalized function
-  //function< T (double t) > transitionFunc ;
-  
-  //Bezier bez ; // can use this instead of generalized func
-  T startVal, endVal, dir, lastVal ;
-  
-  BezierTransition( double bezA, double bezB, double bezC, double bezD ) :
-    Bezier( bezA, bezB, bezC, bezD ) { }
-  
-  BezierTransition( const Vector4f& coeff ) :
-    Bezier( coeff.x,coeff.y,coeff.z,coeff.w ) { }
-  
-  BezierTransition( const Vector4f& coeff,
-                    double iStartT, double iResponseLength, const T& iStartVal, const T& iEndVal,
-                    AnimationCycles iCycles, AnimationRocks iRocks ) :
-    Bezier( coeff.x,coeff.y,coeff.z,coeff.w, iStartT, iResponseLength, iCycles, iRocks )
-  {
-    reset( startT, iResponseLength, iStartVal, iEndVal ) ;
-  }
-  
-  void reset( double newStartTime, double newResponseLen, const T& iStartValue, const T& iEndValue ){
-    startT = newStartTime ;
-    responseLength = newResponseLen ;
-    
-    startVal = iStartValue ;
-    endVal = iEndValue ;
-    
-    dir = endVal - startVal ;
-    lastVal = (*this)(startT); // INITIALIZE THIS. Otherwise lastVal has a random value!
-  }
-  
-  // I give you a NET DISPLACEMENT to apply, relative to some starting pos.
-  // Since these are used in the GPU, 
-  // DOES NOT update lastVal, b/c/ well, I need lastVal to be intact in d.
-  T operator()( double t ) {
-    return startVal + dir*(Bezier::operator()( t )) ;
-  }
-  
-  // Gets you the DISPLACEMENT since the last value.
-  T d( double t ) {
-    T newVal = (*this)( t ) ;
-    T diff = newVal - lastVal ;
-    lastVal = newVal ;
-    return diff ;
-  }
-} ;
 
 // This is a superglobal variable for passing a single Vector3f
 // between 2 files that both include Vectorf.h, but do not have any other

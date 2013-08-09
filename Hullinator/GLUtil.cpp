@@ -27,6 +27,7 @@ map<int,const char*> glErrName = createErrMap() ;
 
 void drawPC( const vector<VertexPC>& verts, GLenum drawMode )
 {
+  if( !verts.size() ) return ;
   glEnableClientState( GL_VERTEX_ARRAY ) ;  CHECK_GL ;
   glEnableClientState( GL_COLOR_ARRAY ) ;  CHECK_GL ;
   
@@ -40,6 +41,7 @@ void drawPC( const vector<VertexPC>& verts, GLenum drawMode )
 
 void drawPNC( const vector<VertexPNC>& verts, GLenum drawMode )
 {
+  if( !verts.size() ) return ;
   glEnableClientState( GL_VERTEX_ARRAY ) ;  CHECK_GL ;
   glEnableClientState( GL_NORMAL_ARRAY ) ;  CHECK_GL ;
   glEnableClientState( GL_COLOR_ARRAY ) ;  CHECK_GL ;

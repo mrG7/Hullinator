@@ -35,11 +35,16 @@
 #ifdef _WIN32
 #include <stdlib.h> // MUST BE BEFORE GLUT ON WINDOWS
 #include <gl/glut.h>
+
 #else
 #include <GLUT/glut.h>
 #include <OpenGL/gl.h>
 #include <OpenGL/glu.h>
 #include <Carbon/Carbon.h>
+
+// I call them by their windows names, on mac gets renamed
+#define VK_RIGHT kVK_RightArrow
+#define VK_LEFT kVK_LeftArrow
 #endif
 #include "GLUtil.h"
 #include "StdWilUtil.h"
@@ -149,6 +154,7 @@ void help()
   }
 }
 
+#ifdef __APPLE__
 KeyMap keyStates ;
 
 bool IS_KEYDOWN( uint16_t vKey )
@@ -158,6 +164,9 @@ bool IS_KEYDOWN( uint16_t vKey )
   uint8_t shift = vKey % 32 ;
   return keyStates[index].bigEndianValue & (1 << shift) ;
 }
+#else
+#define IS_KEYDOWN( c ) (GetAsyncKeyState( c ) & 0x8000)
+#endif
 
 void hullHullTest()
 {
@@ -181,9 +190,9 @@ void sphereHullTest()
   Vector3f pt = Matrix3f::rotationY( ang+=0.0001f ) * Vector3f( 20,20*sin(ang/3.f),20 ) ;
   
   static float r = 3.f ;
-  if( IS_KEYDOWN( kVK_RightArrow ) )
+  if( IS_KEYDOWN( VK_RIGHT ) )
     r += 0.01f ;
-  if( IS_KEYDOWN( kVK_LeftArrow ) )
+  if( IS_KEYDOWN( VK_LEFT ) )
     r -= 0.01f ;
   
   Vector3f closestPtOnHull ;
@@ -209,9 +218,9 @@ void sphereTriTest()
   tri1 = Triangle( rot*Vector3f( -20,0,5 ), rot*Vector3f( 20,0,5 ), rot*Vector3f( 0,20,-5 ) ) ;
   
   static float r = 3.f ;
-  if( IS_KEYDOWN( kVK_RightArrow ) )
+  if( IS_KEYDOWN( VK_RIGHT ) )
     r += 0.01f ;
-  if( IS_KEYDOWN( kVK_LeftArrow ) )
+  if( IS_KEYDOWN( VK_LEFT ) )
     r -= 0.01f ;
   
   Vector3f closestPtOnHull ;
@@ -230,9 +239,9 @@ void sphereTriTest()
 void hullTriTest()
 {
   static float ang = 0.f;
-  if( IS_KEYDOWN( kVK_RightArrow ) )
+  if( IS_KEYDOWN( VK_RIGHT ) )
     ang += 0.001f ;
-  if( IS_KEYDOWN( kVK_LeftArrow ) )
+  if( IS_KEYDOWN( VK_LEFT ) )
     ang -= 0.001f ;
   
   Matrix3f rot = Matrix3f::rotationY( ang ) ; // * Matrix3f::rotationX( M_PI- ang ) ;
@@ -277,9 +286,9 @@ void planePlanePlaneTest()
 void triTriTest()
 {
   static float ang = 0.f;
-  if( IS_KEYDOWN( kVK_RightArrow ) )
+  if( IS_KEYDOWN( VK_RIGHT ) )
     ang += 0.001f ;
-  if( IS_KEYDOWN( kVK_LeftArrow ) )
+  if( IS_KEYDOWN( VK_LEFT ) )
     ang -= 0.001f ;
   
   Matrix3f rot = Matrix3f::rotationY( ang ) ;
@@ -307,8 +316,10 @@ void triTriTest()
 void draw()
 {
   // FIRST I'LL DO THE PROCESSING HERE
+  #ifdef __APPLE__
   GetKeys(keyStates) ;
-  
+  #endif
+
   // Which test mode are you running?
   switch( mode )
   {

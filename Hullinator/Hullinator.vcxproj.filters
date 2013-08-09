@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="util">
+      <UniqueIdentifier>{e09855a9-8024-4061-96ca-d0a0734b9ece}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="geom">
+      <UniqueIdentifier>{572ba22d-f92f-4e5f-b1a4-3dcbc531716b}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="GLUtil.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="MersenneTwister.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="StdWilUtil.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="Vectorf.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="AABB.cpp">
+      <Filter>geom</Filter>
+    </ClCompile>
+    <ClCompile Include="Intersectable.cpp">
+      <Filter>geom</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Vectorf.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="GLUtil.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="MersenneTwister.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="Message.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="StdWilUtil.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="AABB.h">
+      <Filter>geom</Filter>
+    </ClInclude>
+    <ClInclude Include="Geometry.h">
+      <Filter>geom</Filter>
+    </ClInclude>
+    <ClInclude Include="Hull.h">
+      <Filter>geom</Filter>
+    </ClInclude>
+    <ClInclude Include="Intersectable.h">
+      <Filter>geom</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
