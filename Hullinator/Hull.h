@@ -121,8 +121,23 @@ struct Hull
   
   // Has to be BUNCH of values b/c there could be a # of values on the perimeter
   //map< int, vector<Vector3f> > Ns,Ps ; // i used these for finding the AVERAGE pts.
-  Hull()
+
+  Hull() {
+    defaults() ;
+  }  
+
+  Hull( const vector<Vector3f> &initialPts )
   {
+    defaults() ;
+    
+    // I make sure to eliminate pts that are within a tolerence of each other (NO DUPES)
+    for( int i = 0 ; i < initialPts.size() ; i++ )
+      addPtToBound( initialPts[i] ) ;
+      
+    solve() ;
+  }
+
+  void defaults(){
     tolerance = 0.5 ; // THE BIGGER YOU SET THIS, THE MORE LIKELY
     // THE HULL IS TO "IGNORE" OUTLIERS OF THE HULL AT ANY STAGE.
     // IF A POINT IS LESS THAN `TOLERANCE` UNITS AWAY FROM THE HULL AT
@@ -138,13 +153,25 @@ struct Hull
     finalPts.clear() ;  finalNormals.clear() ;  finalTris.clear() ;
     aabb = AABB() ;
   }
-  
+
+  // THE PUBLIC INTERFACE:
+  // You want to bind this pt too.
+  void addPtToBound( const Vector3f& pt ) {
+    // I'll only add it if its unique. insert each point only once.
+    // If we get past this for loop the pt will be added.
+    for( int i = 0 ; i < verts.size() ; i++ )
+      if( verts[i].isNear( pt ) ) 
+        return ;//we had pt already
+    verts.push_back( pt ) ; // is a UNIQUE vertex of the submesh.
+  }
+
   void solve()
   {
     initFromExtremePts() ;
     expandToContainAllPts() ;
   }
-  
+
+private:
   // Finds the initial set of extreme points for the hull.
   void findExtreme()
   {
@@ -172,31 +199,20 @@ struct Hull
     // The tolerance should be related to the extreme points
   }
   
-  void initFromExtremePts()
+  void initFrom4Tet()
   {
-    findExtreme() ;
-    
-    // IF THE 6 EXTREME POINTS ARE NOT UNIQUE, then
-    // the initial mesh could be malformed if we don't take precaution.
-    
-    // Those 6 extreme pts form the initial hull mesh.
-    // it's a really crude approximation, but if no points lie that far outside,
-    // it could actually be a pretty good approx.
-    /*
-    // 8 tri  version
-    int *P=maxes, *N=mins; // alias names
-    addTri( P[2], P[0], P[1] ) ; // bitwise so it doesn't short cct
-    addTri( P[2], P[1], N[0] ) ;
-    addTri( P[2], N[0], N[1] ) ;
-    addTri( P[2], N[1], P[0] ) ;
-    
-    addTri( N[2], P[1], P[0] ) ;
-    addTri( N[2], N[0], P[1] ) ;
-    addTri( N[2], N[1], N[0] ) ;
-    addTri( N[2], P[0], N[1] ) ;
-    //*/
     //warning( "Degenerate tri added to hull `%s`", name.c_str() ) ;
     
+    // Instead use a tetrahedral seed mesh from 4 opposite AABB corners
+    // (a tetrahedron from the points marked with *, and if those are not distinct,
+    // then from the points marked with .)
+    //
+    //   *----.
+    //  /|   /|
+    // .-.--* *
+    // |/   |/
+    // *----.
+
     // Use the AABB, and find the 4 pts that are nearest the pxpypz corners.. etc.
     aabb.recomputeCorners() ;
     
@@ -254,8 +270,6 @@ struct Hull
       // Even if this happens, the convex hull still might come out correctly.
       warning( "Extreme corners bad, only %d of them, %d %d %d %d", uniqueExtremeCorners.size(),
         extremeCorners[1], extremeCorners[2], extremeCorners[4], extremeCorners[7] ) ;
-        
-      
     }
     
     // wind: 1,4,7 | 1,7,2 | 1,2,4 | 4,2,7
@@ -263,7 +277,40 @@ struct Hull
     addTri( extremeCorners[1], extremeCorners[7], extremeCorners[2] ) ;
     addTri( extremeCorners[1], extremeCorners[2], extremeCorners[4] ) ;
     addTri( extremeCorners[4], extremeCorners[2], extremeCorners[7] ) ;
+  }
+  
+  void initFrom6AxisExtremes()
+  {
+    // IF THE 6 EXTREME POINTS ARE NOT UNIQUE, then
+    // the initial mesh could be malformed if we don't take precaution.
     
+    // Those 6 extreme pts form the initial hull mesh.
+    // it's a really crude approximation, but if no points lie that far outside,
+    // it could actually be a pretty good approx.
+
+    // (can use 6 extreme points, but I found it was more likely that
+    // single-axis extremes were more likely to be the same point,
+    // or backwards faces could get generated, which is rather disasterous for Quickhull.
+    // 8 tri  version
+    int *P=maxes, *N=mins; // alias names
+    addTri( P[2], P[0], P[1] ) ;
+    addTri( P[2], P[1], N[0] ) ;
+    addTri( P[2], N[0], N[1] ) ;
+    addTri( P[2], N[1], P[0] ) ;
+    
+    addTri( N[2], P[1], P[0] ) ;
+    addTri( N[2], N[0], P[1] ) ;
+    addTri( N[2], N[1], N[0] ) ;
+    addTri( N[2], P[0], N[1] ) ;
+  }
+  
+  void initFromExtremePts()
+  {
+    findExtreme() ;
+    //initFrom6AxisExtremes() ;
+    initFrom4Tet() ;
+    
+    // Check the hull is ok
     if( !convexityTest() )
     {
       error( "BAD SEED HULL. Your hull will malfunction because the initial tetrahedron got fucked up. "
@@ -297,87 +344,13 @@ struct Hull
     return 1 ;
   }
   
-  void drawDebugLines( const Vector4f& color ) const {
-    for( int i = 0 ; i < indices.size() ; i+=3 )
-      addDebugTriLine( verts[indices[i]], verts[indices[i+1]], verts[indices[i+2]], color ) ;
-  }
-
-  void drawDebug( const Vector4f& color ) const {
-    //for( int i = 0 ; i < indices.size() ; i+=3 )
-    //  addDebugTriSolid( verts[indices[i]], verts[indices[i+1]], verts[indices[i+2]], color ) ;
-    for( int i = 0 ; i < finalTris.size() ; i++ )
-    {
-      addDebugTriSolid( finalTris[i].a,finalTris[i].b,finalTris[i].c, color ) ;
-    }
-    
-  }
-  
-  void drawDebugExtremePts() const {
-    // SHOW THE ORIGINAL EXTREME POINTS
-    /*
-    for( int axis = 0 ; axis < 3 ; axis++ )
-    {
-      Vector4f color( !axis, (axis==1)?1.f:0.f, (axis==2)?1.f:0.f, 1.f ) ;
-      addDebugPoint( verts[mins[axis]], color*0.5 ) ;
-      addDebugPoint( verts[maxes[axis]], color ) ;
-    }
-    //*/
-    
-    // Show the points closest to the AABB's corners
-    for( int i = 0 ; i < extremeCorners.size() ; i++ )
-      addDebugPoint( verts[extremeCorners[i]], Vector4f( i&1, i&2, i&4, 1.f ) ) ;
-
-  }
-  
-  void drawDebugOriginalPts() const
-  {
-    for( int i = 0 ; i < verts.size() ; i++ )
-      addDebugPoint( verts[i], inside(i)?Green:Red ) ;
-  }
-  
-  void drawDebugFaceNormals() const
-  {
-    for( int i = 0 ; i < finalTris.size() ; i++ )
-    {
-      Vector3f c = finalTris[i].triCentroid() ;
-      addDebugLine( c, c+finalTris[i].plane.normal, Yellow ) ;
-    }
-  }
-  
-  void drawDebugRemainingPts( const Vector3f& o, const Vector4f& color ) const {
-    // DISPLAY THE remIndices, AND A LINE TO THEIR CLOSEST FUCKING HULL FACE
-    for( int i = 0 ; i < remIndices.size() ; i++ )
-    {
-      const Vector3f& pt = verts[remIndices[i]] ;
-      if( inside( remIndices[i] ) ) 
-        ; // addDebugPoint( o + pt, Green ) ;
-      else
-      {
-        Vector3f ptOnTri ;
-        distanceToClosestTri( remIndices[i], ptOnTri ) ;
-        addDebugPoint( o + pt, Red ) ;
-        addDebugLine( o + pt, o + ptOnTri, Red ) ;
-      }
-    }
-  }
-  
-  // You want to bind this pt too.
-  void addPtToBound( const Vector3f& pt ) {
-    // I'll only add it if its unique. insert each point only once.
-    // If we get past this for loop the pt will be added.
-    for( int i = 0 ; i < verts.size() ; i++ )
-      if( verts[i].isNear( pt ) ) 
-        return ;//we had pt already
-    verts.push_back( pt ) ; // is a UNIQUE vertex of the submesh.
-  }
-  
+  // THIS IS THE ONLY WAY TO ADD A TRIANGLE TO THE HULL.
   bool addTri( int ia, int ib, int ic ) {
     if( ia==ib || ia==ic || ib==ic ){
       //warning( "Degenerate tri %d %d %d", ia, ib, ic ) ;
       return 0 ; // degenerate
     }
     
-    // THIS IS THE ONLY WAY TO ADD A TRIANGLE TO THE HULL.
     // There you have a triangle added.
     indices.push_back( ia ) ;    indices.push_back( ib ) ;    indices.push_back( ic ) ;
     //addDebugLine( debugPASS1 + tri.triCentroid(), debugPASS1 + tri.triCentroid() + tri.plane.normal*0.1f, Yellow ) ;
@@ -519,7 +492,7 @@ struct Hull
       for( int i = 0 ; i < remIndices.size() ; i++ )
       {
         Vector3f ptOnTri ;
-        float dist = distanceToClosestTri( remIndices[i], ptOnTri ) ;
+        float dist = distanceToClosestTriIB( remIndices[i], ptOnTri ) ;
         if( dist == HUGE ) {
           //error( "Point %d is INSIDE the hull.",remIndices[i] ) ;
           //addDebugPoint( debugPASS1, Blue ) ;
@@ -546,13 +519,12 @@ struct Hull
     
     getFinalPts() ;    
   }
-  
+
   // Tri normals point OUTSIDE the hull, so,
   // if you are on the + side of any tri you are NOT INSIDE
   // Because we're trying to simplify the hull, EXTREMELY CLOSE POINTS
   // are considered OUTSIDE
-
-  bool inside( int pti ) const {
+  bool insideIB( int pti ) const {
     for( int i = 0 ; i < (int)indices.size() ; i+=3 )
     {
       // Reconstructing the plane IS expensive, but this code isn't optimized there.
@@ -576,7 +548,7 @@ struct Hull
     // delete 4, 5, 6, 8
     // 
     for( int i = (int)remIndices.size()-1 ; i >= 0 ; --i )
-      if( inside( remIndices[i] ) )
+      if( insideIB( remIndices[i] ) )
       {
         //info( "Removing %d", remIndices[i] ) ;
         remIndices.erase( remIndices.begin() + i ) ;
@@ -585,27 +557,20 @@ struct Hull
   
   // Get you the distance to the CLOSEST triangle in the hull.
   // The point is outside already, now, get me the SMALLEST distance,
-  float distanceToClosestTri( int pti, Vector3f& closestPtOnTri ) const {
+  // This operates on the INDEX BUFFER, ie it is to be used
+  // DURING HULL CONSTRUCTION, before finalTris is complete.
+  // So you shouldn't use this outside this class.  It is marked IB
+  // because it uses the index buffer, constructing Triangle objects for EACH TRI.
+  // Because of the possibility of face removal tris aren't kept (they could be)
+  float distanceToClosestTriIB( int pti, Vector3f& closestPtOnTri ) const {
     float minDist=HUGE ;
     for( int i = 0 ; i < indices.size() ; i+=3 )
     {
       Triangle tri( verts[indices[i]], verts[indices[i+1]], verts[indices[i+2]] ) ;
+      
       Vector3f ptOnTri ;
-      int type=0;
-      float dist = tri.distanceToPoint( verts[pti], ptOnTri, type ) ;
-      
-      Vector4f color = Red;
-      if( type==0 )  color = Green ;
-      else if( type==1 ) color = Blue ;
-      
-      if( dist > 0.f ){
-        //addDebugPoint( debugPASS1+verts[pti], color ) ;
-        //addDebugLine( debugPASS1+verts[pti], debugPASS1+ptOnTri, color ) ;
-      }
-      // If you line up with another plane on the OTHER side,
-      // the distance will be negative, and inadmissible.      
-      if( dist > 0.f && dist < minDist )
-      {
+      float dist = tri.distanceToPoint( verts[pti], ptOnTri ) ;
+      if( dist < minDist ) {
         minDist=dist;
         closestPtOnTri = ptOnTri ;
       }
@@ -615,8 +580,49 @@ struct Hull
     return minDist ;
   }
   
+  
+  
+  
+  
+  
+  
+  
+  ///////////////////////////
+  // INTERSECTION ROUTINES //
+public:
+  // You can ask me if some random pt is inside the hull or not after hull formation completed
+  bool inside( const Vector3f& pt ) const {
+    for( int i = 0 ; i < finalTris.size() ; i++ )
+      if( finalTris[i].plane.distanceToPoint( pt ) > tolerance )
+        return 0 ;
+    return 1 ; // you are inside all the planes
+  }
+
+  float distanceToClosestPointOnHull( const Vector3f& pt, Vector3f& closestPtOnHull ) const {
+    float minDist=HUGE ;
+    for( int i = 0 ; i < finalTris.size() ; i++ )
+    {
+      Vector3f ptOnTri ;
+      float dist = finalTris[i].distanceToPoint( pt, ptOnTri ) ;
+      if( dist < minDist ) {
+        minDist=dist;
+        closestPtOnHull = ptOnTri ;
+      }
+    }
+    return minDist ;
+  }
+
+  Vector3f closestPointTo( const Vector3f& pt ) const {
+    Vector3f closestPtOnHull ;
+    distanceToClosestPointOnHull( pt, closestPtOnHull ) ;
+    return closestPtOnHull ;
+  }
+  
   bool intersectsTri( const Triangle& tri ) const {
     
+    // Generally its pretty accurate, but
+    // this SAT test seems to have some accuracy issues, with detecting false +
+    // See https://github.com/superwills/Hullinator/issues/1
     float meMin, meMax, oMin, oMax ;
     // Start with tri normal.  Only need to test 1 pt from tri, since all 3 will collapse to same pt.
     SATtest( tri.plane.normal, finalPts, meMin, meMax ) ;
@@ -636,6 +642,23 @@ struct Hull
     }
     
     return 1 ;
+
+    /*
+    // Try 3 ray hull, but this does not detect a hull through the middle face of the tri.
+    return intersectsRay( Ray( tri.a, tri.b ) ) || 
+           intersectsRay( Ray( tri.b, tri.c ) ) || 
+           intersectsRay( Ray( tri.c, tri.a ) ) ;
+    //*/
+  }
+
+    
+  bool intersectsSphere( const Vector3f& center, float r, Vector3f& closestPtOnHull ) const {
+    return distanceToClosestPointOnHull( center, closestPtOnHull ) <= r ;
+  }
+  
+  inline bool intersectsSphere( const Vector3f& center, float r ) const {
+    Vector3f closestPtOnHull ;
+    return intersectsSphere( center, r, closestPtOnHull ) ;
   }
   
   bool intersectsHull( const Hull& o ) const {
@@ -669,14 +692,14 @@ struct Hull
   // possible BECAUSE its a convex hull
   bool intersectsRay( const Ray& ray, float &t1, float &t2 ) const {
     // assume intn is .. whole ray.
-    t1=0.f,t2=1.f;
+    t1=0.f,t2=ray.len ;
     
     // Test EVERY tri..
     for( int i = 0 ; i < finalTris.size() ; i++ )
     {
       // solve t for reaching the plane.
       // The t for reaching the plane would be (-plane.d - normal•ray.start)/(normal • ray.dir)
-      float den = finalTris[i].plane.normal.dot( ray.fullLengthDir ) ;
+      float den = finalTris[i].plane.normal.dot( ray.dir ) ;
       float dist = -finalTris[i].plane.d - finalTris[i].plane.normal.dot( ray.start ) ;
       
       // If the ray is //l to the plane, but it runs AWAY from the plane,
@@ -710,13 +733,104 @@ struct Hull
         // of a hit was further on a forward facing plane
         // than on a back facing plane.  Does it make sense to hit
         // a "back facing side" of a (convex) rock BEFORE hitting its "front facing side"? No!
-        if( t1>t2 ) return 0 ;
+        if( t1 > t2 ) return 0 ;
       }
     }
 
     return 1 ;
   }
   
+  inline bool intersectsRay( const Ray& ray, Vector3f& closerPt, Vector3f& furtherPt ) const {
+    float t1,t2 ;
+    bool hit = intersectsRay( ray,t1,t2 ) ;
+    closerPt=ray.at(t1), furtherPt=ray.at(t2);
+    return hit ;
+  }
+  
+  // Only want closest pt
+  inline bool intersectsRay( const Ray& ray, Vector3f& closerPt ) const {
+    float t1,t2 ;
+    bool hit = intersectsRay( ray,t1,t2 ) ;
+    closerPt=ray.at(t1) ;
+    return hit ;
+  }
+  
+  // Hit or not, don't care where
+  inline bool intersectsRay( const Ray& ray ) const {
+    float t1,t2 ;
+    return intersectsRay( ray,t1,t2 ) ;
+  }
+  
+  
+  
+  
+  
+  
+  // Debug functions  
+public:
+  void drawDebugLines( const Vector4f& color ) const {
+    for( int i = 0 ; i < indices.size() ; i+=3 )
+      addDebugTriLine( verts[indices[i]], verts[indices[i+1]], verts[indices[i+2]], color ) ;
+  }
+
+  void drawDebug( const Vector4f& color ) const {
+    //for( int i = 0 ; i < indices.size() ; i+=3 )
+    //  addDebugTriSolid( verts[indices[i]], verts[indices[i+1]], verts[indices[i+2]], color ) ;
+    for( int i = 0 ; i < finalTris.size() ; i++ )
+    {
+      addDebugTriSolid( finalTris[i].a,finalTris[i].b,finalTris[i].c, color ) ;
+    }
+    
+  }
+  
+  void drawDebugExtremePts() const {
+    // SHOW THE ORIGINAL EXTREME POINTS
+    /*
+    for( int axis = 0 ; axis < 3 ; axis++ )
+    {
+      Vector4f color( !axis, (axis==1)?1.f:0.f, (axis==2)?1.f:0.f, 1.f ) ;
+      addDebugPoint( verts[mins[axis]], color*0.5 ) ;
+      addDebugPoint( verts[maxes[axis]], color ) ;
+    }
+    //*/
+    
+    // Show the points closest to the AABB's corners
+    for( int i = 0 ; i < extremeCorners.size() ; i++ )
+      addDebugPoint( verts[extremeCorners[i]], Vector4f( i&1, i&2, i&4, 1.f ) ) ;
+
+  }
+  
+  void drawDebugOriginalPts() const
+  {
+    for( int i = 0 ; i < verts.size() ; i++ )
+      addDebugPoint( verts[i], insideIB(i)?Green:Red ) ;
+  }
+  
+  void drawDebugFaceNormals() const
+  {
+    for( int i = 0 ; i < finalTris.size() ; i++ )
+    {
+      Vector3f c = finalTris[i].centroid ;
+      addDebugLine( c, c+finalTris[i].plane.normal, Yellow ) ;
+    }
+  }
+  
+  void drawDebugRemainingPts( const Vector3f& o, const Vector4f& color ) const {
+    // DISPLAY THE remIndices, AND A LINE TO THEIR CLOSEST FUCKING HULL FACE
+    for( int i = 0 ; i < remIndices.size() ; i++ )
+    {
+      const Vector3f& pt = verts[remIndices[i]] ;
+      if( insideIB( remIndices[i] ) ) 
+        ; // addDebugPoint( o + pt, Green ) ;
+      else
+      {
+        Vector3f ptOnTri ;
+        distanceToClosestTriIB( remIndices[i], ptOnTri ) ;
+        addDebugPoint( o + pt, Red ) ;
+        addDebugLine( o + pt, o + ptOnTri, Red ) ;
+      }
+    }
+  }
 } ;
 
 

@@ -391,14 +391,19 @@ struct Plane
   // makes this better, for whatever reason.
   inline PlaneSide iSide( const Vector3f& p ) const
   {
-    float val = normal.dot( p ) + d ;
+    float dist = distanceToPoint( p ) ;
     
     // first see if it's within some epsilon of 0
     // the bigger the eps, the fatter the plane
-    if( isNear( val, 0.0f, EPS_MIN ) )  return PlaneSide::Straddling ;
-    else if( val > 0 ) return PlaneSide::InFront ;
+    if( isNear( dist, 0.0f, EPS_MIN ) )  return PlaneSide::Straddling ;
+    else if( dist > 0 ) return PlaneSide::InFront ;
     else return PlaneSide::Behind ;
   }
+  
+  // Just convenient functions to get which side of plane you're on
+  // pSide is +Side, nSide is -side
+  inline bool pSide( const Vector3f& p ) const { return distanceToPoint( p ) > 0.f ; }
+  inline bool nSide( const Vector3f& p ) const { return distanceToPoint( p ) < 0.f ; }
   
   // 0: ON PLANE EXACTLY (almost never happens)
   // +: >0: IN FRONT of plane (on normal side)
@@ -615,17 +620,21 @@ struct Plane
 struct Triangle
 {
   Vector3f a,b,c ;
+  Vector3f centroid ;
   Plane plane ; // I often need the plane.
   
   // If you go ahead an construct the tirangle (instead of using the static fns)
   // then I'm goig to assume you need the plane.
   Triangle( const Vector3f& ia, const Vector3f& ib, const Vector3f& ic ) :
-    a(ia),b(ib),c(ic), plane( a,b,c ) { }
+    a(ia),b(ib),c(ic), plane( a,b,c ) {
+    computeCentroid() ;
+  }
   inline void println() const {
     a.print(), b.print( ", " ), c.println( ", " ) ;
   }
-  inline Vector3f triCentroid() const {
-    return ( a + b + c ) / 3.f ;
+  inline Vector3f& computeCentroid() {
+    centroid = ( a + b + c ) / 3.f ;
+    return centroid ;
   }
   inline Vector3f randomPointInsideTri() const {
     Vector3f bary = Vector3f::randBary() ;
@@ -666,33 +675,125 @@ struct Triangle
   }
   
   // Finds you the closest point on the triangle to your 3space point.
-  float distanceToPoint( const Vector3f& pt, Vector3f& closestPtOnTri, int& type ) const
+  // returns SIGNED DISTANCES, so you can simultaneously decide if pt is
+  // in front or behind tri
+  float signedDistanceToPoint( const Vector3f& pt, Vector3f& closestPtOnTri ) const //, int& type ) const
   {
-    type=0;
+    //type=0;
     float dist ;  Vector3f bary ;
     if( pointInside( closestPtOnTri=plane.projectPointIntoPlane( pt, dist ), bary ) )
+    {
+      //addDebugPoint( closestPtOnTri, Magenta ) ; //FACE
       return dist ;
+    }
     
-    type=1;
+    //type=1; // a corner
     int maxBary = bary.maxIndex() ;
     int oBary1 = OTHERAXIS1( maxBary ), oBary2 = OTHERAXIS2( maxBary ) ;
     if( bary.elts[ oBary1 ] < 0.f && bary.elts[ oBary2 ] < 0.f )
     {
       closestPtOnTri = (&a)[ maxBary ] ;
+      //addDebugPoint( closestPtOnTri, Yellow ) ; //CORNER
       return signum(dist)*distance1( pt, closestPtOnTri ) ;
     }
     
-    type=2;
+    //type=2;
     int minBary = bary.minIndex() ;
     oBary1 = OTHERAXIS1( minBary ), oBary2 = OTHERAXIS2( minBary ) ;
     Ray edge( (&a)[oBary1], (&a)[oBary2] ) ;
-    edge.distanceToPoint( pt, closestPtOnTri ) ;
+    float t = edge.distanceToPoint( pt, closestPtOnTri ) ;
+    
+    // If the t you got was out of range of the edge, then you still fall
+    // on a corner
+    if( t < 0 ) {
+      closestPtOnTri = (&a)[oBary1] ;
+      //addDebugPoint( closestPtOnTri, Cyan ) ; //EDGE
+      return signum(dist)*distance1( pt, closestPtOnTri ) ;
+    }
+    else if( t >= edge.len ) {
+      closestPtOnTri = (&a)[oBary2] ;
+      //addDebugPoint( closestPtOnTri, Cyan ) ;
+      return signum(dist)*distance1( pt, closestPtOnTri ) ;
+    }
+    
+    //addDebugPoint( closestPtOnTri, Cyan ) ;
     return signum(dist)*distance1( pt, closestPtOnTri ) ;
   }
   
+  // Finds you the closest point on the triangle to your 3space point.
+  // pg 141 rtcd.  It might be more efficient than the method I have above,
+  // but for points far away from small triangles, because you hit __6__
+  // if statements before finally returning a value (in tri).
+  Vector3f closestPointOnTri( const Vector3f& p ) const
+  {
+    Vector3f ab = b - a, ac = c - a, ap = p - a ;
+    float d1 = ab.dot(ap), d2 = ac.dot(ap);
+    
+    // This means 
+    if( d1 <= 0.f && d2 <= 0.f ) {
+      //addDebugPoint( a, Yellow ) ; //CORNER
+      return a ;
+    }
+    
+    Vector3f bp = p - b ;
+    float d3 = ab.dot(bp);
+    float d4 = ac.dot(bp);
+    if( d3 >= 0.f && d4 <= d3 ) {
+      //addDebugPoint( b, Yellow ) ; //CORNER
+      return b ;
+    }
+    
+    float vc = d1*d4 - d3*d2 ;
+    if( vc <= 0.f && d1 >= 0.f && d3 <= 0.f ) {
+      float v = d1 / (d1 - d3) ;
+      Vector3f closestPtOnTri = a + ab*v ;
+      //addDebugPoint( closestPtOnTri, Orange ) ;
+      return closestPtOnTri ;
+    }
+    
+    Vector3f cp = p - c ;
+    float d5 = ab.dot( cp ) ;
+    float d6 = ac.dot( cp ) ;
+    if( d6 >= 0.f && d5 <= d6 ) {
+      //addDebugPoint( c, Yellow ) ; //CORNER
+      return c ;
+    }
+    
+    float vb = d5*d2 - d1*d6 ;
+    if( vb <= 0.f && d2 >= 0.f && d6 <= 0.f ) {
+      float w = d2 / (d2 - d6) ;
+      Vector3f closestPtOnTri = a + ac*w ;
+      //addDebugPoint( closestPtOnTri, Orange ) ; // EDGE
+      return closestPtOnTri ;
+    }
+    
+    float va = d3*d6 - d5*d4 ;
+    if( va <= 0.f && (d4 - d3) >= 0.f && (d5-d6) >= 0.f )
+    {
+      float w = (d4 - d3 ) / (d4-d3 + d5-d6) ;
+      Vector3f closestPtOnTri = b + (c-b)*w ;
+      //addDebugPoint( closestPtOnTri, Orange ) ; // EDGE
+      return closestPtOnTri ;
+    }
+    
+    float den = 1.f / (va+vb+vc);
+    float v = vb*den;
+    float w = vc*den;
+    Vector3f closestPtOnTri = a + ab*v + ac*w ;
+    //addDebugPoint( closestPtOnTri, Magenta ) ; //FACE
+    return closestPtOnTri ;
+  }
+  
+  // you only want the DISTANCE to the closest pt on the tri
   inline float distanceToPoint( const Vector3f& pt ) const {
-    int edgy;
-    Vector3f closestPtOnTri ;  return distanceToPoint( pt, closestPtOnTri,edgy ) ;
+    Vector3f ptOnTri = closestPointOnTri( pt ) ;
+    return (pt-ptOnTri).len() ;
+  }
+  
+  // you want both DISTANCE AND closest pt on the tri (UNSIGNED)
+  inline float distanceToPoint( const Vector3f& pt, Vector3f& closestPtOnTri ) const {
+    closestPtOnTri = closestPointOnTri( pt ) ;
+    return (pt-closestPtOnTri).len() ;
   }
   
   // yes/no intersection, barycentric coordinates of 
@@ -790,7 +891,7 @@ struct Triangle
   }
   
   // gives you the RAY along which there is intersection.
-  // loi is lineOfIntersection.  If you don't need the loi, DON'T USE IT,
+  // loi is lineOfIntersection.  If you don't need the loi, DON'T ASK FOR IT (use the other overload),
   // because the extra computations to get the exact points of tri intercut
   // is very expensive.  If the intersection failed, loi is the ray along which
   // the triangle's planes intersect.

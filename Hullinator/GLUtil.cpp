@@ -274,37 +274,38 @@ void addPermDebugRay( const Ray& ray, const Vector4f& color ) {
   addPermDebugRay( ray, color, color ) ;
 }
 
+// Tri
 void addDebugTriLine( const Vector3f& a, const Vector3f& b, const Vector3f& c, const Vector4f& color ){
   addDebugLine( a, b, color ) ;
   addDebugLine( b, c, color ) ;
   addDebugLine( a, c, color ) ;
+}
+void addDebugTriLine( const Triangle& tri, const Vector4f& color ){
+  addDebugTriLine( tri.a, tri.b, tri.c, color ) ;
 }
 void addPermDebugTriLine( const Vector3f& a, const Vector3f& b, const Vector3f& c, const Vector4f& color ){
   addPermDebugLine( a, b, color ) ;
   addPermDebugLine( b, c, color ) ;
   addPermDebugLine( a, c, color ) ;  
 }
+void addPermDebugTriLine( const Triangle& tri, const Vector4f& color ){
+  addPermDebugTriLine( tri.a, tri.b, tri.c, color ) ;
+}
+
 void addDebugTriSolid( const Vector3f& a, const Vector3f& b, const Vector3f& c, const Vector4f& color ){
   Triangle tri( a,b,c ) ;
   debugTris.push_back( VertexPNC( a, tri.plane.normal, color ) ) ;
   debugTris.push_back( VertexPNC( b, tri.plane.normal, color ) ) ;
   debugTris.push_back( VertexPNC( c, tri.plane.normal, color ) ) ;
 }
+void addDebugTriSolid( const Triangle& tri, const Vector4f& color ){
+  addDebugTriSolid( tri.a, tri.b, tri.c, color ) ;
+}
 void addPermDebugTriSolid( const Vector3f& a, const Vector3f& b, const Vector3f& c, const Vector4f& color ){
   Triangle tri( a,b,c ) ;
   debugTrisPerm.push_back( VertexPNC( a, tri.plane.normal, color ) ) ;
   debugTrisPerm.push_back( VertexPNC( b, tri.plane.normal, color ) ) ;
   debugTrisPerm.push_back( VertexPNC( c, tri.plane.normal, color ) ) ;
-}
-
-void addDebugTriLine( const Triangle& tri, const Vector4f& color ){
-  addDebugTriLine( tri.a, tri.b, tri.c, color ) ;
-}
-void addPermDebugTriLine( const Triangle& tri, const Vector4f& color ){
-  addPermDebugTriLine( tri.a, tri.b, tri.c, color ) ;
-}
-void addDebugTriSolid( const Triangle& tri, const Vector4f& color ){
-  addDebugTriSolid( tri.a, tri.b, tri.c, color ) ;
 }
 void addPermDebugTriSolid( const Triangle& tri, const Vector4f& color ){
   addPermDebugTriSolid( tri.a, tri.b, tri.c, color ) ;
@@ -313,7 +314,7 @@ void addPermDebugTriSolid( const Triangle& tri, const Vector4f& color ){
 void addDebugTriSolidWithNormal( const Triangle& tri, const Vector4f& color )
 {
   addDebugTriSolid( tri.a, tri.b, tri.c, color ) ;
-  Vector3f c = tri.triCentroid() ;
+  Vector3f c = tri.centroid ;
   addDebugLine( c, c+tri.plane.normal, Yellow ) ;
 }
 
@@ -326,16 +327,27 @@ void addPermDebugQuadSolid( const Vector3f& a, const Vector3f& b, const Vector3f
   addPermDebugTriSolid( a, c, d, color ) ;
 }
 
-void addDebugSphere( const Vector3f& center, float r, const Vector4f& color )
+void addDebugSphereLine( const Vector3f& center, float r, const Vector4f& color )
 {
   // add 60 verts on for the 30 lines that will be added.
   //Game->renderer->debugLines->data.resize( Game->renderer->debugLines->data.size() + 60 ) ;
   Geometry::makeWireframeSphere( debugLines, center, r, color ) ;
 }
-void addPermDebugSphere( const Vector3f& center, float r, const Vector4f& color )
+void addPermDebugSphereLine( const Vector3f& center, float r, const Vector4f& color )
 {
   // add 60 verts on for the 30 lines that will be added.
   //Game->renderer->debugLinesPerm->data.resize( Game->renderer->debugLinesPerm->data.size() + 60 ) ;
   Geometry::makeWireframeSphere( debugLinesPerm, center, r, color ) ;
+}
+
+void addDebugSphereSolid( const Vector3f& center, float r, const Vector4f& color )
+{
+  // I'm using 2 subdivs to make the sphere extra round.  since this is only debug code for
+  // viz i don't care about efficiency here.
+  Geometry::makeSphereSubdiv( debugTris, center, r, color, 2 ) ;
+}
+void addPermDebugSphereSolid( const Vector3f& center, float r, const Vector4f& color )
+{
+  Geometry::makeSphereSubdiv( debugTrisPerm, center, r, color, 2 ) ;
 }
 

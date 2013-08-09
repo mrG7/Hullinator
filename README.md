@@ -11,7 +11,7 @@ Convex hull generation and intersection (SAT test)
 
 ![Hullinator hull hull intn](http://i.imgur.com/d5vhJif.png)
 
-### Ray convex hull and ray tri intersections
+### Ray-convex hull, tri-hull and ray-tri intersections
 
 ![Ray hull ray tri](http://i.imgur.com/xgUnmIr.png)
 

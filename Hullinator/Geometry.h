@@ -14,21 +14,22 @@ struct Geometry
     //(±1, ±φ, 0)
     //(±φ, 0, ±1)
     //where φ = (1 + √5) / 2 
-
-    const float t = ( 1 + sqrt( 5.0 ) ) / 2.0 ;
+    const static float t = ( 1.f + sqrtf( 5.f ) ) / 2.f ;
+    const static float L = sqrtf( 2.f / (5.f+sqrtf(5.f)) ) ;
+    const static float S = t*L;
     Vector3f v[12]; // 12 base verts
     
     for( int i = 0 ; i < 4; i++ )
       //v[ i ] = Vector( 0, -(i&2), -(i&1)*t ) ; 
-      v[ i ] = Vector3f( 0, i&2?-1:1, i&1?-t:t ) * r ;
+      v[ i ] = Vector3f( 0, i&2?-L:L, i&1?-S:S ) * r ;
 
     for( int i = 4 ; i < 8; i++ )
       //v[ i ] = Vector( -(i&2), -(i&1)*t, 0 ) ; 
-      v[ i ] = Vector3f( i&2?-1:1, i&1?-t:t, 0 ) * r ;
+      v[ i ] = Vector3f( i&2?-L:L, i&1?-S:S, 0 ) * r ;
 
     for( int i = 8 ; i < 12; i++ )
       //v[ i ] = Vector( -(i&1)*t, 0, -(i&2) ) ; 
-      v[ i ] = Vector3f( i&1?-t:t, 0, i&2?-1:1 ) * r ;
+      v[ i ] = Vector3f( i&1?-S:S, 0, i&2?-L:L ) * r ;
       
     // these are the faces.
     addTri( verts, v[0], v[2], v[8] ) ;
@@ -59,27 +60,25 @@ struct Geometry
 
     addTri( verts, v[3], v[5], v[7] ) ;
     
-    
   }
   
   template <typename T> static void makeSphere( vector<T>& verts, const Vector3f& center, float r, const Vector4f& color )
   {
-    const float t = ( 1 + sqrt( 5.0 ) ) / 2.0 ;
-    T v[12]; // 12 base verts
+    const static float t = ( 1.f + sqrtf( 5.f ) ) / 2.f ;
+    const static float L = sqrtf( 2.f / (5.f+sqrtf(5.f)) ) ;
+    const static float S = t*L;
     
+    T v[12]; // 12 base verts
     for( int i = 0 ; i < 4; i++ )
-      v[ i ].normal = v[ i ].pos = Vector3f( 0, i&2?-1:1, i&1?-t:t ) ;
-
+      v[ i ].normal = v[ i ].pos = Vector3f( 0, i&2?-L:L, i&1?-S:S ) ;  // do not scale, normal assigned to save value
     for( int i = 4 ; i < 8; i++ )
-      v[ i ].normal = v[ i ].pos = Vector3f( i&2?-1:1, i&1?-t:t, 0 ) ;
-
+      v[ i ].normal = v[ i ].pos = Vector3f( i&2?-L:L, i&1?-S:S, 0 ) ;
     for( int i = 8 ; i < 12; i++ )
-      v[ i ].normal = v[ i ].pos = Vector3f( i&1?-t:t, 0, i&2?-1:1 ) ;
-      
+      v[ i ].normal = v[ i ].pos = Vector3f( i&1?-S:S, 0, i&2?-L:L ) ;
     for( int i = 0 ; i < 12 ; i++ )
     {
       v[ i ].color = color ;
-      v[ i ].pos *= r ;
+      v[ i ].pos *= r ; // this is here b/c so the normals are still unit above
       v[ i ].pos += center ; // offset after scaling
     }
     
@@ -112,7 +111,64 @@ struct Geometry
 
     addTri( verts, v[3], v[5], v[7] ) ;
   }
+  
+  template <typename T> static void makeSphereSubdiv( vector<T>& verts, const Vector3f& center, float r, const Vector4f& color,
+    int subdivs )
+  {
+    const static float t = ( 1.f + sqrtf( 5.f ) ) / 2.f ;
+    const static float L = sqrtf( 2.f / (5.f+sqrtf(5.f)) ) ;
+    const static float S = t*L;
+    
+    T v[12]; // 12 base verts
+    for( int i = 0 ; i < 4; i++ )
+      v[ i ].normal = v[ i ].pos = Vector3f( 0, i&2?-L:L, i&1?-S:S ) ;  // do not scale, normal assigned to save value
+    for( int i = 4 ; i < 8; i++ )
+      v[ i ].normal = v[ i ].pos = Vector3f( i&2?-L:L, i&1?-S:S, 0 ) ;
+    for( int i = 8 ; i < 12; i++ )
+      v[ i ].normal = v[ i ].pos = Vector3f( i&1?-S:S, 0, i&2?-L:L ) ;
+    for( int i = 0 ; i < 12 ; i++ )
+    {
+      v[ i ].color = color ;
+      v[ i ].pos *= r ; // this is here b/c so the normals are still unit above
+    }
+    
+    // these are the faces.
+    int n = 0;
+    n+=addTriSubdiv( verts, v[0], v[2], v[8], r, subdivs ) ;
+    n+=addTriSubdiv( verts, v[0], v[8], v[4], r, subdivs ) ;
+    n+=addTriSubdiv( verts, v[0], v[4], v[6], r, subdivs ) ;
+    n+=addTriSubdiv( verts, v[0], v[6], v[9], r, subdivs ) ;
+    n+=addTriSubdiv( verts, v[0], v[9], v[2], r, subdivs ) ;
 
+    n+=addTriSubdiv( verts, v[2], v[7], v[5], r, subdivs ) ;
+    n+=addTriSubdiv( verts, v[2], v[5], v[8], r, subdivs ) ;
+    n+=addTriSubdiv( verts, v[2], v[9], v[7], r, subdivs ) ;
+      
+    n+=addTriSubdiv( verts, v[8], v[5], v[10], r, subdivs ) ;
+    n+=addTriSubdiv( verts, v[8], v[10], v[4], r, subdivs ) ;
+    
+    n+=addTriSubdiv( verts, v[10], v[5], v[3], r, subdivs ) ;
+    n+=addTriSubdiv( verts, v[10], v[3], v[1], r, subdivs ) ;
+    n+=addTriSubdiv( verts, v[10], v[1], v[4], r, subdivs ) ;
+    
+    n+=addTriSubdiv( verts, v[1], v[6], v[4], r, subdivs ) ;
+    n+=addTriSubdiv( verts, v[1], v[3], v[11], r, subdivs ) ;
+    n+=addTriSubdiv( verts, v[1], v[11], v[6], r, subdivs ) ;
+
+    n+=addTriSubdiv( verts, v[6], v[11], v[9], r, subdivs ) ;
+
+    n+=addTriSubdiv( verts, v[11], v[3], v[7], r, subdivs ) ;
+    n+=addTriSubdiv( verts, v[11], v[7], v[9], r, subdivs ) ;
+
+    n+=addTriSubdiv( verts, v[3], v[5], v[7], r, subdivs ) ;
+    
+    for( int i = (int)verts.size() - n*3 ; i < verts.size() ; i++ )
+      verts[i].pos += center ;  // offset after scaling
+  }
+
+
+  
+  // Used by the wireframe version
   template <typename T>
   static void makeIcosahedronVerts( T* v, float r )
   {
@@ -121,16 +177,14 @@ struct Geometry
     //(±1, ±φ, 0)
     //(±φ, 0, ±1)
     //where φ = (1 + √5) / 2
-    const static float t = ( 1 + sqrtf( 5.0f ) ) / 2.0 ;
+    const static float t = ( 1.f + sqrtf( 5.f ) ) / 2.f ;
     const static float L = sqrtf( 2.f / (5.f+sqrtf(5.f)) ) ;
     const static float S = t*L;
     
     for( int i = 0 ; i < 4; i++ )
       v[ i ].pos = Vector3f( 0, i&2?-L:L, i&1?-S:S ) * r ;
-
     for( int i = 4 ; i < 8; i++ )
       v[ i ].pos = Vector3f( i&2?-L:L, i&1?-S:S, 0 ) * r ;
-
     for( int i = 8 ; i < 12; i++ )
       v[ i ].pos = Vector3f( i&1?-S:S, 0, i&2?-L:L ) * r ;
   }
@@ -142,16 +196,15 @@ struct Geometry
     //(±1, ±φ, 0)
     //(±φ, 0, ±1)
     //where φ = (1 + √5) / 2
-    const static float t = ( 1 + sqrtf( 5.0f ) ) / 2.0 ;
-    const static float L = sqrtf( 2.f / (5.f+sqrtf(5.f)) ) ;
-    const static float S = t*L;
     
+    // L&S are shortened versions of φ and 1 respectively.
+    const static float t = ( 1.f + sqrtf( 5.f ) ) / 2.f ; // ~1.62
+    const static float L = sqrtf( 2.f / (5.f+sqrtf(5.f)) ) ; // ~0.53, shorten "1" so √( φ² + L² ) = 1
+    const static float S = t*L; // ~0.85, shorter φ
     for( int i = 0 ; i < 4; i++ )
       v[ i ] = Vector3f( 0, i&2?-L:L, i&1?-S:S ) * r ;
-
     for( int i = 4 ; i < 8; i++ )
       v[ i ] = Vector3f( i&2?-L:L, i&1?-S:S, 0 ) * r ;
-
     for( int i = 8 ; i < 12; i++ )
       v[ i ] = Vector3f( i&1?-S:S, 0, i&2?-L:L ) * r ;
   }
@@ -159,7 +212,6 @@ struct Geometry
   static void makeWireframeSphere( vector<Vector3f>& verts, const Vector3f& center, float r )
   {
     Vector3f v[12]; // 12 base verts
-    
     makeIcosahedronVerts( v, r ) ;
     
     for( int i = 0 ; i < 12 ; i++ )
@@ -220,9 +272,7 @@ struct Geometry
     // If you use index buffers, then cost is only
     // 12 verts = 84 floats, + 60 indices (shorts)= eq 84 + 30 float size = 114.
     
-
   }
-
 
   // For the vertex types that do not support normals
   template <typename T>
@@ -232,10 +282,7 @@ struct Geometry
     makeIcosahedronVerts( v, r ) ;
       
     for( int i = 0 ; i < 12 ; i++ )
-    {
       v[ i ].color = color ;
-      v[ i ].pos *= r ;
-    }
       
     // these are the faces.
     addTri( verts, v[0], v[2], v[8] ) ;
@@ -271,7 +318,6 @@ struct Geometry
   template <typename T>
   static void makeOctahedron( vector<T>& verts, const T& baseVertex, const Matrix4f& mat, const Vector3f& offset )
   {
-
     float bwx=0.055, bwy=0.055, heado=0, tailo=8;
     float midp = 2.0*tailo/3.0 ;
     T PX,NX,PY,NY,HEAD,TAIL;
@@ -313,6 +359,30 @@ struct Geometry
   
   template <typename T> static void addTri( vector<T>& verts, const T& A, const T& B, const T& C ) {
     verts.push_back( A ) ;  verts.push_back( B ) ;  verts.push_back( C ) ;
+  }
+  
+  // Subdivs the tri you're trying to add n times.  it renormalizes the
+  // avg'd positions so they sit on a sphere of same radius
+  template <typename T> static int addTriSubdiv( vector<T>& verts, const T& A, const T& B, const T& C, float r, int n ) {
+    if( n <= 0 )
+    {
+      verts.push_back( A ) ;  verts.push_back( B ) ;  verts.push_back( C ) ;
+      return 1 ; // 1 tri added.
+    }
+    else
+    {
+      // don't actually add the tri until n subdivs have been done
+      T AB2 = A.avgWith( B ), BC2=B.avgWith(C),CA2=C.avgWith(A);
+      
+      AB2.pos.setLen( r ) ;
+      BC2.pos.setLen( r ) ;
+      CA2.pos.setLen( r ) ;
+      
+      return addTriSubdiv( verts, A, AB2, CA2, r, n-1 ) +
+      addTriSubdiv( verts, AB2, B, BC2, r, n-1 ) +
+      addTriSubdiv( verts, CA2, BC2, C, r, n-1 ) +
+      addTriSubdiv( verts, CA2, AB2, BC2, r, n-1 ) ; //center tri
+    }
   }
   
   // (0,1)

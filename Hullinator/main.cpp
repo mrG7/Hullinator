@@ -54,19 +54,20 @@ int w=768, h=768 ;// window width and height.
 
 static float mx, my, sbd=100.f,ptSize=1.f,lineWidth=1.f ;
 bool showOriginalPoints=0;
-vector<VertexPC> pointCloud1,pointCloud2 ;
+vector<Vector3f> pointCloud1,pointCloud2 ;
 Vector4f lightPos0, lightPos1, lightPos2, lightPos3 ;
 Frustum frustum(w,h) ;
 int pointsPerCloud = 35 ;
 
 const char* ModeName[] = {
   "Hull-hull",
+  "Sphere-hull",
   "Hull-tri",
   "Tri-tri",
   "Plane-plane-plane"
 } ;
 enum Mode{
-  HullHull, HullTri, TriTri, PlanePlanePlane
+  HullHull, SphereHull, HullTri, TriTri, PlanePlanePlane
   
 } ;
 int mode = 0 ;
@@ -77,23 +78,9 @@ planeTri1(0,0,0),planeTri2(0,0,0),planeTri3(0,0,0) ; // huge tris used as planes
 
 void regenHulls()
 {
-  hull1.clear(), hull2.clear() ;
+  // Oh look at the beautiful syntax. hull1 is a Hull( around point cloud 1 ).
+  hull1 = Hull( pointCloud1 ), hull2 = Hull( pointCloud2 ) ;
   
-  // Add all the points to the bound.
-  for( int i = 0 ; i < pointCloud1.size() ; i++ ) {
-    hull1.addPtToBound( pointCloud1[i].pos ) ;
-  }
-  for( int i = 0 ; i < pointCloud2.size() ; i++ ) {
-    hull2.addPtToBound( pointCloud2[i].pos ) ;
-  }
-  
-  hull1.initFromExtremePts() ;
-  //hull1.drawDebug( Black ) ;
-  hull1.expandToContainAllPts() ;
-  
-  hull2.initFromExtremePts() ;
-  //hull2.drawDebug( Black ) ;
-  hull2.expandToContainAllPts() ;
   
 }
 
@@ -103,18 +90,18 @@ void newPointClouds(){
   Vector3f c1=Vector3f::random( 0, 15 ), c2=Vector3f::random(-15,0) ;
   for( int i = 0 ; i < pointsPerCloud ; i++ )
   {
-    pointCloud1.push_back( VertexPC( c1+ Vector3f::random(-10,10), Vector4f::random() ) ) ;
-    pointCloud2.push_back( VertexPC( c2+ Vector3f::random(-10,10), Vector4f::random() ) ) ;
+    pointCloud1.push_back( c1+ Vector3f::random(-10,10) ) ;
+    pointCloud2.push_back( c2+ Vector3f::random(-10,10) ) ;
   }
   regenHulls() ;
 }
 
 void shiftPointClouds() {
   for( int i = 0 ; i < pointCloud1.size() ; i++ ) {
-    pointCloud1[i].pos += Vector3f::random(-.2,.2) ;
+    pointCloud1[i] += Vector3f::random(-.2,.2) ;
   }
   for( int i = 0 ; i < pointCloud2.size() ; i++ ) {
-    pointCloud2[i].pos += Vector3f::random(-.2,.2) ;
+    pointCloud2[i] += Vector3f::random(-.2,.2) ;
   }
   regenHulls() ;
 }
@@ -133,24 +120,23 @@ void init() // Called before main loop to set up the program
 
 void help()
 {
+  msg( "mode", ModeName[mode], Gray ) ;
   switch( mode )
   {
     case Mode::HullHull:
-      msg( "mode", "Hull-Hull mode.", Gray ) ;
       msg( "instr1", "(m) makes new point clouds.  +/- to change # pts per cloud." ) ;
       msg( "instr2", "holding (r) jiggles the clouds. (e) shows the original points that made up the hull." ) ;
-      //msg( "instr2", ".", 10.f ) ;
       break;
+    case Mode::SphereHull:
+      msg( "instr1", "left/right arrows to grow/shrink sphere. Also (m), (+/-)" ) ;
+      break ;
     case Mode::HullTri:
-      msg( "mode", "hull-tri mode.", Gray ) ;
       msg( "instr1", "left/right arrows to spin tri. Also (m), (+/-)" ) ;
       break;
     case Mode::TriTri:
-      msg( "mode", "Tri-tri mode.", Gray ) ;
       msg( "instr1", "left/right arrows to spin tris. (2) for wireframe." ) ;
       break;
     case Mode::PlanePlanePlane:
-      msg( "mode", "plane-plane-plane mode.", Gray ) ;
       msg( "instr1", "Intn is yellow pt.  CTRL+Click to fire rays at the planes." ) ;
       break;  
   }
@@ -185,6 +171,31 @@ void hullHullTest()
   {
     hull1.drawDebugOriginalPts() ;
     hull2.drawDebugOriginalPts() ;
+  }
+}
+
+void sphereHullTest()
+{
+  // move a pt around,
+  static float ang=0.f;
+  Vector3f pt = Matrix3f::rotationY( ang+=0.0001f ) * Vector3f( 20,20*sin(ang/3.f),20 ) ;
+  
+  static float r = 3.f ;
+  if( IS_KEYDOWN( kVK_RightArrow ) )
+    r += 0.01f ;
+  if( IS_KEYDOWN( kVK_LeftArrow ) )
+    r -= 0.01f ;
+  
+  Vector3f closestPtOnHull ;
+  if( hull1.intersectsSphere( pt, r, closestPtOnHull ) ) {
+    hull1.drawDebug( Red ) ;
+    addDebugLine( pt, closestPtOnHull, Red ) ;
+    addDebugSphereSolid( pt, r, Purple ) ;
+  }
+  else {
+    hull1.drawDebug( Vector4f(0,0,1,0.75) ) ;
+    addDebugLine( pt, closestPtOnHull, Yellow ) ;
+    addDebugSphereSolid( pt, r, Blue ) ;
   }
 }
 
@@ -276,7 +287,10 @@ void draw()
   case HullHull:
     hullHullTest() ;
     break;
-    
+  
+  case Mode::SphereHull:
+    sphereHullTest() ;
+    break; 
   case HullTri:
     hullTriTest() ;
     break ;
@@ -292,6 +306,9 @@ void draw()
     error( "INVALID MODE %d", mode ) ;
     break ;
   }
+  
+  
+  
   
   glEnable( GL_DEPTH_TEST ) ;
   glClearColor( 0.1, 0.1, 0.1, 0.1 ) ;
@@ -397,8 +414,8 @@ bool testHitHull( const Hull& hull, const Ray& ray )
   if( hitHull )
   {
     //printf( "hit t1=%f, t2=%f\n", t1, t2 ) ;
-    addPermDebugPoint( ray.at01( t1 ), Yellow ) ;
-    addPermDebugPoint( ray.at01( t2 ), Red ) ;
+    addPermDebugPoint( ray.at( t1 ), Yellow ) ;
+    addPermDebugPoint( ray.at( t2 ), Red ) ;
   }
   return hitHull ;
 }

@@ -2251,20 +2251,7 @@ struct Axis
 
 // The vertex types are:
 // VertexPcNCT, VertexPcCT, VertexPCT, VertexPCTT
-struct VertexPNC
-{
-  Vector3f pos ;
-  Vector3f normal ;
-  Vector4f color ;
-  
-  VertexPNC(){}
-    
-  VertexPNC( const Vector3f& iPos, const Vector3f& iNormal, const Vector4f& iColor ) :
-    pos( iPos ), normal( iNormal ), color( iColor )
-  {
-    
-  }
-} ;
+
 
 // Actually PcNCT (position, centroid, normal, color, texture),
 // but 'c' is implied as part of "position"
@@ -2334,6 +2321,50 @@ struct VertexPcCT
               
 } ;
 
+struct VertexPNC
+{
+  Vector3f pos ;
+  Vector3f normal ;
+  Vector4f color ;
+  
+  VertexPNC(){}
+    
+  VertexPNC( const Vector3f& iPos, const Vector3f& iNormal, const Vector4f& iColor ) :
+    pos( iPos ), normal( iNormal ), color( iColor )
+  {
+    
+  }
+  
+  VertexPNC avgWith( const VertexPNC& o ) const {
+    VertexPNC res ;
+    res.pos = (pos + o.pos)/2.f ;
+    res.normal = (normal + o.normal).normalize() ;
+    res.color = (color + o.color)/2.f ;
+    return res ;
+  }
+  
+} ;
+
+struct VertexPC
+{
+  Vector3f pos ;
+  Vector4f color ;
+  
+  VertexPC(){}
+    
+  VertexPC( const Vector3f& iPos, const Vector4f& iColor ) :
+    pos( iPos ), color( iColor )
+  {
+    
+  }
+  
+  VertexPC avgWith( const VertexPC& o ) const {
+    VertexPC res ;
+    res.pos = (pos + o.pos)/2.f ;
+    res.color = (color + o.color)/2.f ;
+    return res ;
+  }
+} ;
 
 // FOR TEXT and stuff that doesn't use the centroid wrap transformation
 struct VertexPCT // TEX2f,
@@ -2389,19 +2420,7 @@ struct VertexPCCT
   Vector2f tex ;
 } ;
 
-struct VertexPC
-{
-  Vector3f pos ;
-  Vector4f color ;
-  
-  VertexPC(){}
-    
-  VertexPC( const Vector3f& iPos, const Vector4f& iColor ) :
-    pos( iPos ), color( iColor )
-  {
-    
-  }
-} ;
+
 
 
 struct VertexPcC
