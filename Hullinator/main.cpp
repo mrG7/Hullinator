@@ -199,6 +199,34 @@ void sphereHullTest()
   }
 }
 
+void sphereTriTest()
+{
+  // move a pt around,
+  static float ang=0.f;
+  Vector3f pt = Matrix3f::rotationY( ang+=0.0001f ) * Vector3f( 20,20*sin(ang/3.f),20 ) ;
+  
+  Matrix3f rot = Matrix3f::rotationY( ang*10.f ) ; // * Matrix3f::rotationX( M_PI- ang ) ;
+  tri1 = Triangle( rot*Vector3f( -20,0,5 ), rot*Vector3f( 20,0,5 ), rot*Vector3f( 0,20,-5 ) ) ;
+  
+  static float r = 3.f ;
+  if( IS_KEYDOWN( kVK_RightArrow ) )
+    r += 0.01f ;
+  if( IS_KEYDOWN( kVK_LeftArrow ) )
+    r -= 0.01f ;
+  
+  Vector3f closestPtOnHull ;
+  if( tri1.intersectsSphere( pt, r ) ) {
+    hull1.drawDebug( Red ) ;
+    addDebugLine( pt, closestPtOnHull, Red ) ;
+    addDebugSphereSolid( pt, r, Purple ) ;
+  }
+  else {
+    hull1.drawDebug( Vector4f(0,0,1,0.75) ) ;
+    addDebugLine( pt, closestPtOnHull, Yellow ) ;
+    addDebugSphereSolid( pt, r, Blue ) ;
+  }
+}
+
 void hullTriTest()
 {
   static float ang = 0.f;

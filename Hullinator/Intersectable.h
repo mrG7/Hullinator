@@ -969,7 +969,7 @@ struct Triangle
            // and early return after 1st hit due to short cct or
   }
   
-  // triangle-sphere
+  // Triangle::intersectsSphere, triangle-sphere
   bool intersectsSphere( const Vector3f& sphereCenter, float r ) const 
   {
     // rtcd page 168:
@@ -1259,41 +1259,47 @@ struct PrecomputedTriangle
     return intersectsRay( ray, p, bary ) ;
   }
   
-  
-  // Finds you the closest point on the triangle to your 3space point.
-  float distanceToPoint( const Vector3f& pt, Vector3f& closestPtOnTri ) const
+  float signedDistanceToPoint( const Vector3f& pt, Vector3f& closestPtOnTri ) const //, int& type ) const
   {
-    // 1. First get the |_ distance to the triangle's plane.
+    //type=0;
     float dist ;  Vector3f bary ;
-    
-    // 2. that pt into plane of polygon.  is projected pt IN tri?
     if( pointInside( closestPtOnTri=plane.projectPointIntoPlane( pt, dist ), bary ) )
     {
-      return dist ; // that's your distance.  the point is totally above the tri,
-      // so the closest pt on thet trI IS the project pt.
+      //addDebugPoint( closestPtOnTri, Magenta ) ; //FACE
+      return dist ;
     }
     
-    
-    // Otherwise, you're near an edge or corner.
-    // CORNER:
-    // Working from the barycentric coordinates, I get the closest point on the triangle to the hit
-    // IF TWO ARE NEGATIVE: the closest point to you is ONE OF THE TRIANGLE CORNERS (the one corresponding
-    // to the lone + side.)
+    //type=1; // a corner
     int maxBary = bary.maxIndex() ;
     int oBary1 = OTHERAXIS1( maxBary ), oBary2 = OTHERAXIS2( maxBary ) ;
     if( bary.elts[ oBary1 ] < 0.f && bary.elts[ oBary2 ] < 0.f )
     {
-      // Now the POINT is the one with maxBary
-      closestPtOnTri = (&a)[ maxBary ] ; // a,b, or c exactly.
-      return distance1( closestPtOnTri, pt ) ;
+      closestPtOnTri = (&a)[ maxBary ] ;
+      //addDebugPoint( closestPtOnTri, Yellow ) ; //CORNER
+      return signum(dist)*distance1( pt, closestPtOnTri ) ;
     }
     
-    // otherwise, you're on an EDGE
-    int minBary = bary.minIndex() ; // this is the negative one.  the other 2 are +.
+    //type=2;
+    int minBary = bary.minIndex() ;
     oBary1 = OTHERAXIS1( minBary ), oBary2 = OTHERAXIS2( minBary ) ;
-    
     Ray edge( (&a)[oBary1], (&a)[oBary2] ) ;
-    return edge.distanceToPoint( pt, closestPtOnTri ) ;
+    float t = edge.distanceToPoint( pt, closestPtOnTri ) ;
+    
+    // If the t you got was out of range of the edge, then you still fall
+    // on a corner
+    if( t < 0 ) {
+      closestPtOnTri = (&a)[oBary1] ;
+      //addDebugPoint( closestPtOnTri, Cyan ) ; //EDGE
+      return signum(dist)*distance1( pt, closestPtOnTri ) ;
+    }
+    else if( t >= edge.len ) {
+      closestPtOnTri = (&a)[oBary2] ;
+      //addDebugPoint( closestPtOnTri, Cyan ) ;
+      return signum(dist)*distance1( pt, closestPtOnTri ) ;
+    }
+    
+    //addDebugPoint( closestPtOnTri, Cyan ) ;
+    return signum(dist)*distance1( pt, closestPtOnTri ) ;
   }
   
   // THere are 2 different things going on here.  Kisses and bites.
@@ -1312,6 +1318,10 @@ struct PrecomputedTriangle
     // The sphere "chomps" a corner
     TriSphereCorner
   } ;
+  
+  // PrecomputedTriangle::intersectsSphere
+  // Triangle-sphere, but gets you the closest pt on the tri to the sphere
+  // as well as the interpolated normal at that pt.
   int intersectsSphere( const Vector3f& sphereCenter, float r, Vector3f& bary, Vector3f& closestPt, Vector3f& normalAtPt ) const {
     // rtcd page 168:
     // 1. test if the sphere intersects the plane of the polygon.  false if not
@@ -1334,11 +1344,11 @@ struct PrecomputedTriangle
     // to the lone + side.)
     int maxBary = bary.maxIndex() ;
     int oBary1 = OTHERAXIS1( maxBary ), oBary2 = OTHERAXIS2( maxBary ) ;
-    if( bary.elts[ oBary1 ] < 0 && bary.elts[ oBary2 ] < 0 )
+    if( bary.elts[ oBary1 ] < 0.f && bary.elts[ oBary2 ] < 0.f )
     {
       // The fix is simple: your barycentric coordinates are 
-      bary.elts[ maxBary ] = 1,
-      bary.elts[ oBary1 ] = bary.elts[ oBary2 ] = 0 ;
+      bary.elts[ maxBary ] = 1.f,
+      bary.elts[ oBary1 ] = bary.elts[ oBary2 ] = 0.f ;
       
       // Now the POINT is
       closestPt = (&a)[ maxBary ] ; // a,b, or c exactly.
@@ -1357,23 +1367,16 @@ struct PrecomputedTriangle
     int minBary = bary.minIndex() ; // this is the negative one.  the other 2 are +.
     oBary1 = OTHERAXIS1( minBary ), oBary2 = OTHERAXIS2( minBary ) ;
     
-    // Otherwise, if only 1 is negative, A POINT on the edge of the triangle (not necessarily the CLOSEST point)
-    // would be given by dropping the negative bary to 0 and adding an equal amount to the other two so that
-    // the other two coords add to 1.
-    /*
-    float hDiff = (bary.elts[oBary1] + bary.elts[oBary2] - 1.f)/2.f ;
-    bary.elts[minBary] = 0 ;
-    bary.elts[oBary1] -= hDiff ;
-    bary.elts[oBary2] -= hDiff ;
-    
-    Vector3f normal = getInterpolatedNormal( bary ) ;
-    Vector3f 
-    */
-    
     // OR you could just use the |_ distance (assuming only ONE is negative) between the ray
     // from the 2 pts there.
     Ray edge( (&a)[oBary1], (&a)[oBary2] ) ;
     float t = edge.normalizedDistanceToPoint( sphereCenter, closestPt ) ;
+    
+    // Very important check: if you are OOB the ray then nail you to the vertex.
+    // t GETS CLAMPED HERE, so use in fetching interpolated normal below remains correct.
+    if( t < 0.f ) { t=0.f, closestPt=(&a)[oBary1] ; }
+    else if( t > 1.f ) { t=1.f, closestPt=(&a)[oBary2]; }
+    
     //printf( "Normalized t %f\n", t ) ;
     if( distance2( sphereCenter, closestPt ) > r*r )
       return TriSphereNOINTERSECTION ;
@@ -1382,7 +1385,8 @@ struct PrecomputedTriangle
     //info( "Chomping intersection FROM SIDE" ) ;
     
     // The barycentric coordinates of the hit is actually related to t.
-    bary.elts[minBary] = 0 ;
+    // t is how far along the ray we was.
+    bary.elts[minBary] = 0.f ;
     bary.elts[oBary1] = t ;
     bary.elts[oBary2] = 1.f-t;
     
@@ -1393,8 +1397,6 @@ struct PrecomputedTriangle
     //else      printf( "Pt too far from edge (%f)\n", t*edge.len, r ) ;
     
   }
-  
-  
   
   inline bool intersectsSphere( const Vector3f& sphereCenter, float r ) const {
     Vector3f bary, closestPt, normalAtPt ;
