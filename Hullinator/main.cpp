@@ -72,12 +72,13 @@ const char* ModeName[] = {
   "Tri-tri",
   "Sphere-hull",
   "Sphere-tri",
+  "Sphere-AABB",
   "Hull-AABB",
   "Plane-plane-plane"
 } ;
 enum Mode{
   HullHull, HullTri, TriTri, 
-  SphereHull, SphereTri, HullAABB,
+  SphereHull, SphereTri, SphereAABB, HullAABB,
     
   PlanePlanePlane // LEAVE PlanePlanePlane LAST, its used to determine #modes
 } ;
@@ -92,8 +93,6 @@ void regenHulls()
 {
   // Oh look at the beautiful syntax. hull1 is a Hull( around point cloud 1 ).
   hull1 = Hull( pointCloud1 ), hull2 = Hull( pointCloud2 ) ;
-  
-  
 }
 
 void newPointClouds(){
@@ -149,7 +148,10 @@ void help()
       msg( "instr1", "left/right arrows to grow/shrink sphere. up/down to move in/out. Also (m), (+/-)" ) ;
       break ;
     case Mode::SphereTri:
-      msg( "instr1", "" ) ;
+      msg( "instr1", "left/right arrows to grow/shrink sphere" ) ;
+      break ;
+    case Mode::SphereAABB:
+      msg( "instr1", "left/right arrows to grow/shrink sphere and also move box. (r) jiggles, (m) makes new, (+/-)" ) ;
       break ;
     case Mode::HullAABB:
       msg( "instr1", "left/right/up/down arrows to move aabb. (r) jiggles, also (m), (+/-)" ) ;
@@ -306,6 +308,49 @@ void sphereTriTest()
   }
 }
 
+void sphereAABBTest()
+{
+  float move=0.01f;
+  Vector3f offsets ;
+  if( IS_KEYDOWN( VK_UP ) )
+    offsets.y += move;
+  if( IS_KEYDOWN( VK_DOWN ) )
+    offsets.y -= move;
+  if( IS_KEYDOWN( VK_RIGHT ) )
+    offsets.x += move;
+  if( IS_KEYDOWN( VK_LEFT ) )
+    offsets.x -= move;
+
+  for( int i = 0 ; i < pointCloud2.size() ; i++ )
+    pointCloud2[i] += offsets ;
+  
+  hull2 = Hull( pointCloud2 ) ; // you have ot regen the cloud, and so the aabb.
+  static float ang=0.f;
+  Vector3f pt = Matrix3f::rotationY( ang+=0.0001f ) * Vector3f( 20,20*sin(ang/3.f),20 ) ;
+  
+  Matrix3f rot = Matrix3f::rotationY( ang*10.f ) ; // * Matrix3f::rotationX( M_PI- ang ) ;
+  tri1 = Triangle( rot*Vector3f( -20,0,5 ), rot*Vector3f( 20,0,5 ), rot*Vector3f( 0,20,-5 ) ) ;
+  
+  static float r = 3.f ;
+  if( IS_KEYDOWN( VK_RIGHT ) )
+    r += 0.01f ;
+  if( IS_KEYDOWN( VK_LEFT ) )
+    r -= 0.01f ;
+  
+  sphere1 = Sphere( pt,r ) ;
+  // use the 2nd hull's aabb
+  if( hull2.aabb.intersectsSphere( sphere1 ) )
+  {
+    addDebugSphereSolid( sphere1.c, sphere1.r, Purple ) ;
+    hull2.aabb.drawDebugSolid( Red ) ;
+  }
+  else
+  {
+    addDebugSphereSolid( sphere1.c, sphere1.r, Green ) ;
+    hull2.aabb.drawDebugSolid( Blue ) ;
+  }
+}
+
 void hullAABBTest()
 {
   float move=0.01f;
@@ -389,6 +434,9 @@ void draw()
     break; 
   case Mode::SphereTri:
     sphereTriTest() ;
+    break ;
+  case Mode::SphereAABB:
+    sphereAABBTest() ;
     break ;
   case Mode::HullAABB:
     hullAABBTest() ;
@@ -597,6 +645,11 @@ void mouse( int button, int state, int x, int y )
     case Mode::SphereTri:
       rayHits |= testHitSphere( sphere1, ray ) ;
       rayHits |= testHitTri( tri1, ray ) ;
+      break ;
+    
+    case Mode::SphereAABB:
+      rayHits |= testHitSphere( sphere1, ray ) ;
+      rayHits |= testHitAABB( hull2.aabb, ray ) ;
       break ;
       
     case Mode::HullAABB:
