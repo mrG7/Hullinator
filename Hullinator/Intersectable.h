@@ -629,6 +629,19 @@ struct Triangle
     a(ia),b(ib),c(ic), plane( a,b,c ) {
     computeCentroid() ;
   }
+  
+  // T MUST have a .pos component for this to compile.
+  template <typename T>
+  Triangle( vector<T>& data, int firstTriNo ) :  // what # triangle is the first one
+    a( data[firstTriNo].pos ), b( data[firstTriNo+1].pos ), c( data[firstTriNo+2].pos ),
+    
+    // I can do this because a,b,c get init first due to a,b,c being BEFORE plane in member listing (above)
+    // See http://stackoverflow.com/questions/1242830/constructor-initialization-list-evaluation-order
+    plane( a,b,c )
+  {
+    computeCentroid() ;
+  }
+  
   inline void println() const {
     a.print(), b.print( ", " ), c.println( ", " ) ;
   }
@@ -652,19 +665,22 @@ struct Triangle
   {
     // christer ericsson's barycentric coordinates
     //            AB        AC        AP
-    Vector3f v0 = b-a, v1=c-a, v2=p-a ;
-    float d00 = v0.dot(v0);
-    float d01 = v0.dot(v1);
-    float d11 = v1.dot(v1);
+    Vector3f v0 = b-a, v1=c-a, v2=p-a ; // 9
+    // Can cache: v0, v1, d00, d01, d11.
+    float d00 = v0.dot(v0); //5
+    float d01 = v0.dot(v1); //5
+    float d11 = v1.dot(v1); //5
     
-    float d20 = v2.dot(v0);
-    float d21 = v2.dot(v1);
-    float denom = d00 * d11 - d01 * d01;
-    bary.y = (d11 * d20 - d01 * d21) / denom;
-    bary.z = (d00 * d21 - d01 * d20) / denom;
-    bary.x = 1.f - bary.y - bary.z;
+    float d20 = v2.dot(v0); //5
+    float d21 = v2.dot(v1); //5, 34 total
+    float denom = d00 * d11 - d01 * d01; //3
+    bary.y = (d11 * d20 - d01 * d21) / denom; //4 how much AB 46
+    bary.z = (d00 * d21 - d01 * d20) / denom; //4 how much AC 50
+    bary.x = 1.f - bary.y - bary.z; //2 how much (??) 
     
-    return ( bary.y >= 0.f && bary.z >= 0.f && bary.x >= 0.f ) ;
+    return ( bary.y >= 0.f && bary.z >= 0.f && bary.x >= 0.f ) ;//5
+    // 51 total
+    
     // bary.x -ve if either v or w is greater than 1
     // so we don't have to check the upper limit of 1
   }
@@ -956,6 +972,10 @@ struct Triangle
   // 5 ray tri intersections.  actually reasonable.  it gives you the p and barycentric coordinates of the FIRST hit.
   bool intersectsTri( const Triangle& tri, Vector3f& p, Vector3f& bary ) const
   {
+    //////if( isDegenerate )  return false ; // WELL, a degenerate splinter can still intersect a fat triangle
+    // a degenerate (sliver) tri PRODUCING a ray CAN hit something, but it cannot be HIT BY a ray.
+
+    // 5 ray tri intersections
     return intersectsRay( Ray( tri.a, tri.b ), p, bary ) ||
            intersectsRay( Ray( tri.b, tri.c ), p, bary ) ||
            intersectsRay( Ray( tri.c, tri.a ), p, bary ) ||
@@ -1046,136 +1066,6 @@ struct Triangle
 
 
 
-// A basic class that provides intersection routines
-struct DynamicTriangle
-{
-  Vector3f *a,*b,*c ; // these merely point to entries in a real vertex buffer
-  // Because a DynamicTriangle is SO short lived,
-  // you don't need to worry about 
-  
-  Plane plane ; // you always need this, the plane of the triangle.
-  bool isDegenerate ; // degenerate triangles HAPPEN. deal with them.
-  
-  //DynamicTriangle():a(0),b(0),c(0){  }
-  
-  // T MUST have a .pos component for this to compile.
-  template <typename T>
-  DynamicTriangle( vector<T>& data, int firstTriNo )        // what # triangle is the first one
-  {
-    a = (Vector3f*)(&data[firstTriNo].pos) ;
-    b = (Vector3f*)(&data[firstTriNo+1].pos) ;
-    c = (Vector3f*)(&data[firstTriNo+2].pos) ;
-    
-    plane = Plane( *a, *b, *c ) ;
-    if( plane.isDegenerate() ){
-      isDegenerate = 1 ;
-      //error( "Degenerate triangle, can't be hit" ) ;
-    }
-    else
-      isDegenerate = 0 ;
-  }
-  
-  // barycentric coordinates robust check
-  bool pointInside( const Vector3f& p, Vector3f& bary ) const
-  {
-    // christer ericsson's barycentric coordinates
-    //            AB        AC        AP
-    Vector3f v0 = *b-*a, v1=*c-*a, v2=p-*a ; // 9
-    // Can cache: v0, v1, d00, d01, d11.
-    float d00 = v0.dot(v0); //5
-    float d01 = v0.dot(v1); //5
-    float d11 = v1.dot(v1); //5
-    
-    float d20 = v2.dot(v0); //5
-    float d21 = v2.dot(v1); //5, 34 total
-    float denom = d00 * d11 - d01 * d01; //3
-    bary.y = (d11 * d20 - d01 * d21) / denom; //4 how much AB 46
-    bary.z = (d00 * d21 - d01 * d20) / denom; //4 how much AC 50
-    bary.x = 1.f - bary.y - bary.z; //2 how much (??) 
-    
-    return ( bary.y >= 0.f && bary.z >= 0.f && bary.x >= 0.f ) ;//5
-    // 51 total
-    
-    // bary.x -ve if either v or w is greater than 1
-    // so we don't have to check the upper limit of 1
-  }
-
-  // You don't want the barycentric coordinates back
-  inline bool pointInside( const Vector3f& p ) const {
-    Vector3f bary ;    return pointInside( p, bary ) ;
-  }
-
-  // yes/no intersection, barycentric coordinates of 
-  // intersection, and point of intersection
-  // The reason this is all one method and not broekn up is
-  // some variables from plane intersection (denom) are REUSED
-  // in the barycentric coordinates part.
-  bool intersectsRay( const Ray& ray, Vector3f& p, Vector3f& bary ) const
-  {
-    // a degenerate tri CANNOT be hit by a ray.
-    if( isDegenerate )  return false ;
-    
-    // first get t for which ray intersects plane
-    float t = plane.intersectsRay( ray ) ;
-    
-    // t<0: intn behind start point (ray shoots away from plane)
-    // t>ray.len: intn beyond ray end point
-    if( t < 0 || t > ray.len )  return false ;
-    
-    // at this pt, definitely HIT PLANE, could still miss triangle.
-    p = ray.at( t ) ; // potentially the space location, if barycentric works out
-    
-    return pointInside( p, bary ) ;
-  }
-  
-  inline bool intersectsRay( const Ray& ray, Vector3f& p ) const {
-    Vector3f bary ;    return intersectsRay( ray, p, bary ) ;
-  }
-  
-  inline bool intersectsRay( const Ray& ray ) const {
-    Vector3f p, bary ;    return intersectsRay( ray, p, bary ) ;
-  }
-  
-  // tri-tri triangle-triangle
-  // see pg 173 of rtcd
-  bool intersectsTri( const DynamicTriangle& dtri, Vector3f& p, Vector3f& bary ) const
-  {
-    //////if( isDegenerate )  return false ; // WELL, a degenerate splinter can still intersect a fat triangle
-    // a degenerate (sliver) tri PRODUCING a ray CAN hit something, but it cannot be HIT BY a ray.
-
-    // 5 ray tri intersections
-    return intersectsRay( Ray(*dtri.a, *dtri.b), p, bary ) ||
-           intersectsRay( Ray(*dtri.b, *dtri.c), p, bary ) ||
-           intersectsRay( Ray(*dtri.c, *dtri.a), p, bary ) ||
-           
-           // try 2 of THIS tri's sides against the other before calling it quits
-           dtri.intersectsRay( Ray(*a, *b), p, bary ) ||
-           dtri.intersectsRay( Ray(*b, *c), p, bary ) ;
-           
-           // at least 2 lines will intersect so we don't check the 6th side
-           // p is the value of the intersection that hit, if any
-           // and early return after 1st hit due to short cct or
-  }
-  
-  // triangle-sphere
-  bool intersectsSphere( const Vector3f& sphereCenter, float r ) const 
-  {
-    // rtcd page 168:
-    // 1. test if the sphere intersects the plane of the polygon.  false if not
-    if( fabsf( plane.distanceToPoint( sphereCenter ) ) > r ) // if |_ distance to sphere center is FARther than radius, no hit
-      return false ;
-    
-    // 2. 3 ray sphere (this also tests any pts abc INSIDE tri)
-    if( Ray::intersectsSphere( *a, *b, sphereCenter, r ) ||
-        Ray::intersectsSphere( *b, *c, sphereCenter, r ) ||
-        Ray::intersectsSphere( *a, *c, sphereCenter, r ) )
-      return true ;
-      
-    // 3. project sphere center into plane of polygon.  is projected pt in polygon?
-    return pointInside( plane.projectPointIntoPlane( sphereCenter ) ) ;
-  }
-} ;
-
 // The same as a triangle, only it has some of the barycentric
 // coordinate parameters precomputed.  This makes runtime cost
 // of collisions much less.  Only usable on static geometry.
@@ -1233,8 +1123,8 @@ struct PrecomputedTriangle
     float d21 = v2.dot(v1); //5
     bary.y = (d11 * d20 - d01 * d21) / denomBary ; //4
     bary.z = (d00 * d21 - d01 * d20) / denomBary ; //4
-    bary.x = 1.0f - bary.y - bary.z; //2
-    return ( bary.y >= 0 && bary.z >= 0 && bary.x >= 0 ) ;//5
+    bary.x = 1.f - bary.y - bary.z; //2
+    return ( bary.y >= 0.f && bary.z >= 0.f && bary.x >= 0.f ) ;//5
     //26 total
   }
   
@@ -1266,9 +1156,15 @@ struct PrecomputedTriangle
     if( pointInside( closestPtOnTri=plane.projectPointIntoPlane( pt, dist ), bary ) )
     {
       //addDebugPoint( closestPtOnTri, Magenta ) ; //FACE
-      return dist ;
+      return dist ; // that's your distance.  the point is totally above the tri,
+      // so the closest pt on thet trI IS the project pt.
     }
     
+    // Otherwise, you're near an edge or corner.
+    // CORNER:
+    // Working from the barycentric coordinates, I get the closest point on the triangle to the hit
+    // IF TWO ARE NEGATIVE: the closest point to you is ONE OF THE TRIANGLE CORNERS (the one corresponding
+    // to the lone + side.)
     //type=1; // a corner
     int maxBary = bary.maxIndex() ;
     int oBary1 = OTHERAXIS1( maxBary ), oBary2 = OTHERAXIS2( maxBary ) ;
@@ -1279,6 +1175,7 @@ struct PrecomputedTriangle
       return signum(dist)*distance1( pt, closestPtOnTri ) ;
     }
     
+    // otherwise, you're on an EDGE (but still possibly a corner)
     //type=2;
     int minBary = bary.minIndex() ;
     oBary1 = OTHERAXIS1( minBary ), oBary2 = OTHERAXIS2( minBary ) ;
