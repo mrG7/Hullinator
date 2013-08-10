@@ -2252,27 +2252,7 @@ struct Axis
 
 
 
-// The vertex types are:
-// VertexPcNCT, VertexPcCT, VertexPCT, VertexPCTT
 
-
-// Actually PcNCT (position, centroid, normal, color, texture),
-// but 'c' is implied as part of "position"
-struct VertexPcNC
-{
-  Vector3f pos ;
-  Vector4f centroid ;
-  Vector3f normal ;
-  Vector4f color ;
-    
-  VertexPcNC(){}
-  
-  VertexPcNC( const Vector3f& iPos, const Vector4f& iCentroid, const Vector3f& iNormal, const Vector4f& iColor ) :
-              pos(iPos),centroid(iCentroid),normal(iNormal),color(iColor)
-  {
-  }
-              
-} ;
 // Actually PcNCT (position, centroid, normal, color, texture),
 // but 'c' is implied as part of "position"
 struct VertexPcNCT
@@ -2293,6 +2273,21 @@ struct VertexPcNCT
   VertexPcNCT( const Vector3f& iPos, const Vector3f& iNormal,
                const Vector4f& iColor, const Vector2f& iTex ) :
                pos(iPos),normal(iNormal),tex(iTex),color(iColor)
+  {
+  }
+              
+} ;
+struct VertexPcNC
+{
+  Vector3f pos ;
+  Vector4f centroid ;
+  Vector3f normal ;
+  Vector4f color ;
+    
+  VertexPcNC(){}
+  
+  VertexPcNC( const Vector3f& iPos, const Vector4f& iCentroid, const Vector3f& iNormal, const Vector4f& iColor ) :
+              pos(iPos),centroid(iCentroid),normal(iNormal),color(iColor)
   {
   }
               
@@ -2323,6 +2318,28 @@ struct VertexPcCT
   { }
               
 } ;
+
+struct VertexPcC
+{
+  Vector3f pos ;
+  Vector4f centroid ; //required for wrapping
+  Vector4f color ;
+  
+  VertexPcC(){}
+    
+  VertexPcC( const Vector3f& iPos, const Vector4f& iColor ) :
+    pos( iPos ), centroid(pos), color( iColor )
+  {
+    
+  }
+  
+  VertexPcC( const VertexPcNCT& o ) :
+    pos(o.pos),centroid(o.centroid),color(o.color)
+  { }
+} ;
+
+
+
 
 struct VertexPNC
 {
@@ -2426,24 +2443,7 @@ struct VertexPCCT
 
 
 
-struct VertexPcC
-{
-  Vector3f pos ;
-  Vector4f centroid ; //required for wrapping
-  Vector4f color ;
-  
-  VertexPcC(){}
-    
-  VertexPcC( const Vector3f& iPos, const Vector4f& iColor ) :
-    pos( iPos ), centroid(pos), color( iColor )
-  {
-    
-  }
-  
-  VertexPcC( const VertexPcNCT& o ) :
-    pos(o.pos),centroid(o.centroid),color(o.color)
-  { }
-} ;
+
 
 
 /*
@@ -2486,9 +2486,13 @@ struct VertexPNC
 */
 
 
-
+// DEFAULTS, vertex does NOT have the normal trait
 template <typename> struct hasNormalTrait : std::false_type { };
+
+// Now set up for the types that DO
 template <> struct hasNormalTrait<VertexPcNCT> : std::true_type { };
+template <> struct hasNormalTrait<VertexPcNC> : std::true_type { };
+template <> struct hasNormalTrait<VertexPNC> : std::true_type { };
 
 template <typename> struct hasCentroidTrait : std::false_type { };
 template <> struct hasCentroidTrait<VertexPcNCT> : std::true_type { };

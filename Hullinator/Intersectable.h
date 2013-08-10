@@ -12,6 +12,76 @@ void SATtest( const Vector3f& axis, const vector<Vector3f>& ptSet, float& minAlo
 void SATtest( const Vector3f& axis, const Vector3f& pt, float& minAlong, float& maxAlong ) ;
 void SATtest( const Vector3f& axis, const Vector3f* ptSet, int n, float& minAlong, float& maxAlong ) ;
 
+// a collideable sphere
+struct Sphere
+{
+  Vector3f c ;
+  float r,r2 ;
+  
+  Sphere() { r=r2=1.f ; }
+  
+  Sphere( const Vector3f& center, float radius )
+  {
+    c = center ;
+    r = radius ;
+    r2 = r*r ;
+  }
+  
+  bool contains( const Vector3f& pt ) const {
+    // vector c to point's squared len INSIDE r2.
+    return (pt - c).len2() <= r2 ;
+  }
+  
+  bool intersectsSphere( const Sphere& o ) const {
+    float dist2 = (o.c - c).len2() ;
+    return dist2 <= ( r2 + o.r2 ) ;
+  }
+  
+  // You want the squared distance between the spheres for some reason
+  bool intersectsSphere( const Sphere& o, float& dist2 ) const {
+    dist2 = (o.c - c).len2() ;
+    return dist2 <= ( r2 + o.r2 ) ;
+  }
+
+  // b/c spheres can't be made nonuniform scale is only a float
+  Sphere operator*( float scale ) const {
+    return Sphere( c*scale, r*scale ) ;
+  }
+  Sphere operator/( float scale ) const {
+    return Sphere( c/scale, r/scale ) ;
+  }
+  
+  // provided in DynamicTriangle
+  //static bool intersects( const DynamicTriangle& tri, const Vector3f& center, float r ){
+    // 3 ray-tri intersections 
+  //  return tri.intersects( center, r ) ;
+  //}
+  
+  ///////////////////////////
+  // SEND ME SQUARE RADII
+  // STATIC FUNCTIONS
+  static bool intersectsSphere( const Vector3f& center1, float rSq1, const Vector3f& center2, float rSq2 )
+  {
+    float dist2 = (center2 - center1).len2() ;
+    return dist2 <= ( rSq1 + rSq2 ) ;
+  }
+  
+  static bool intersectsSphere( const Vector3f& center1, float rSq1, const Vector3f& center2, float rSq2, float &dist2 )
+  {
+    dist2 = (center2 - center1).len2() ;
+    return dist2 <= ( rSq1 + rSq2 ) ;
+  }
+  
+  // SEND ME SQUARE RADII
+  static bool intersectsSphere( const Vector3f& center1, float rSq1, const Vector3f& center2, float rSq2, Vector3f& midPt )
+  {
+    midPt = center2 - center1 ;   //Not really the midpoint. I re(ab)used this var.
+    float dist2 = midPt.len2() ;
+    midPt = center1 + midPt/2.f ; //ACTUALLY FIND THE MIDPOINT
+    return dist2 <= ( rSq1 + rSq2 ) ;
+  }
+} ;
+
 // Contains RAY/SPHERE, but RAY/TRIANGLE was put
 // inside the Triangle class
 // t BETWEEN 0 AND LEN, __NOT 0 AND 1__.
@@ -147,61 +217,112 @@ struct Ray
     return start + fullLengthDir*t ;
   }
   
+  // 0, 1 or 2 hits.
+  int intersectsSphere( const Sphere& sphere, Vector3f& closerPt, Vector3f& fartherPt ) const
+  {
+    Vector3f f = start - sphere.c ;
+
+    //float a = 1.f ; // dir.dot(dir); // dir is normalized so it will always be a 1.0f
+    float b = 2.f*f.dot( dir ) ;
+    float c = f.dot( f ) - sphere.r2 ;
+    
+    float disc = b*b - 4.f*c ;
+    if( disc < 0.f )  return 0 ;
+    
+    disc = sqrtf( disc ) ;
+    float t1 = (-b-disc) / 2.f ; // t1 is ALWAYS SMALLER than t2
+    float t2 = (-b+disc) / 2.f ;
+    
+    //// 4x HIT cases:
+    //       -o->       --|-->  |            |  --|->
+    // Impale(t1,t2), Poke(t1,t2>len), ExitWound(t1<0, t2), 
+    //
+    // | -> |
+    // CompletelyInside(t1<0, t2>len)
+    if( isBetweenOrdered( t1, 0.f, len ) )
+    {
+      // Poke or, Impale cases
+      closerPt = at( t1 ) ;        // t1 hits.
+      if( isBetweenOrdered( t2, 0.f, len ) ) {// impale
+        fartherPt = at( t2 ) ;
+        return 2 ;
+      }
+      else { // poke
+        fartherPt = closerPt ; // the "farther pt" is the same as the closer pt (only 1 intn)
+        return 1 ;
+      }
+    }
+    
+    else if( isBetweenOrdered( t2, 0.f, len ) ) // only t2 valid, ExitWound, since not impale
+    {
+      // t1 MUST BE < 0.f here ( t1 happened BEFORE START OF RAY ), you
+      // are starting INSIDE the sphere.
+      closerPt=fartherPt=at( t2 ) ;
+      return 1 ;
+    }
+    else if( t1 < 0.f && t2 > len ) // CompletelyInside
+    {
+      // t1 occurred behind start of ray, and t2 occurred BEYOND end of ray
+      // technically YOU DID NOT HIT THE SPHERE, but you are inside it.
+      // So I return TRUE here and give you the start and end of you ray.
+      closerPt = start ;
+      fartherPt = end ;
+      return 1 ;
+    }
+    
+    // 2x MISS cases:
+    //       ->  o                     o ->              
+    // FallShort (t1>len,t2>len), Past (t1<0,t2<0)
+    return 0 ;
+  }
+  
   // Yes or no answer
-  bool intersectsSphere( const Vector3f& C, float r ) const
+  bool intersectsSphere( const Sphere& sphere ) const
   {
     //If E is the starting point of the ray,
     //.. and L is the end point of the ray,
     //.. and C is the center of sphere you're testing against
     //.. and r is the radius of that sphere
-    Vector3f f = start - C ; // vector from center sphere to ray start
+    Vector3f f = start - sphere.c ; // vector from center sphere to ray start
     
-    float a = 1.f ; // dir.dot(dir); // dir is normalized so it will always be a 1.0f
+    //float a = 1.f ; // dir.dot(dir); // dir is normalized so it will always be a 1.0f
     float b = 2.f*f.dot( dir ) ;
-    float c = f.dot( f ) - r*r ;
+    float c = f.dot( f ) - sphere.r2 ;
     
-    float disc = b*b - 4.f*a*c ;
-    if( disc < 0.f )  return false ;
-    else
-    {
-      disc = sqrtf( disc ) ;
-      float t1 = (-b-disc)/(2.f*a);
-      float t2 = (-b+disc)/(2.f*a);
-      
-      //// 4x HIT cases:
-      //       -o->       --|-->  |            |  --|->
-      // Impale(t1,t2), Poke(t1,t2>len), ExitWound(t1<0, t2), 
-      //
-      // | -> |
-      // CompletelyInside(t1<0, t2>len)
-      
-      // 2x MISS cases:
-      //       ->  o                     o ->              
-      // FallShort (t1>len,t2>len), Past (t1<0,t2<0)
-      
-      return( (t1 >= 0.f && t1 <= len) || // Poke, Impale
-              (t2 >= 0.f && t2 <= len) || // ExitWound
-              (t1 < 0.f  && t2 > len) // CompletelyInside
-            ) ;
-    }
-  }
-  
-  static bool intersectsSphere( const Vector3f& rayStart, const Vector3f& rayEnd, const Vector3f& sphereCenter, float r )
-  {
-    Ray ray( rayStart, rayEnd ) ;
-    return ray.intersectsSphere( sphereCenter, r ) ;
+    float disc = b*b - 4.f*c ; //*a ;
+    if( disc < 0.f )  return 0 ;
+
+    disc = sqrtf( disc ) ;
+    float t1 = (-b-disc) / 2.f ; //originally float t1 = (-b-disc)/(2.f*a);
+    float t2 = (-b+disc) / 2.f ;
+    
+    //// 4x HIT cases:
+    //       -o->       --|-->  |            |  --|->
+    // Impale(t1,t2), Poke(t1,t2>len), ExitWound(t1<0, t2), 
+    //
+    // | -> |
+    // CompletelyInside(t1<0, t2>len)
+    
+    // 2x MISS cases:
+    //       ->  o                     o ->              
+    // FallShort (t1>len,t2>len), Past (t1<0,t2<0)
+    
+    return( (t1 >= 0.f && t1 <= len) || // Poke, Impale
+            (t2 >= 0.f && t2 <= len) || // ExitWound
+            (t1 < 0.f  && t2 > len) // CompletelyInside
+          ) ;
   }
   
   // Positive if hit, negative if fail.
   // Returns the forward distance from the
   // ray origin to the penetration point.
-  float intersectsSphereDistance( const Vector3f& C, float r ) const
+  float intersectsSphereDistance( const Sphere& sphere ) const
   {
-    Vector3f f = start - C ; // vector from center sphere to ray start
+    Vector3f f = start - sphere.c ; // vector from center sphere to ray start
     
-    float a = 1.f ;
+    float a = 1.f ; // dir.dot(dir); // dir is normalized so it will always be a 1.0f
     float b = 2.f*f.dot( dir ) ;
-    float c = f.dot( f ) - r*r ;
+    float c = f.dot( f ) - sphere.r2 ;
     
     float disc = b*b - 4.f*a*c ;
     if( disc >= 0.f )
@@ -273,6 +394,7 @@ struct Ray
   
   
 } ;
+
 
 
 
@@ -594,13 +716,13 @@ struct Plane
   }
   
   // You want the dist back
-  inline bool intersectsSphere( const Vector3f& sphereCenter, float r, float& dist ) const {
+  inline bool intersectsSphere( const Sphere& sphere, float& dist ) const {
     // if |_ distance to sphere center is FARther than radius, no hit
-    return (dist=fabsf( distanceToPoint( sphereCenter ) )) <= r ;
+    return (dist=fabsf( distanceToPoint( sphere.c ) )) <= sphere.r ;
   }
 
-  inline bool intersectsSphere( const Vector3f& sphereCenter, float r ) const {
-    return fabsf( distanceToPoint( sphereCenter ) ) <= r ;
+  inline bool intersectsSphere( const Sphere& sphere ) const {
+    return fabsf( distanceToPoint( sphere.c ) ) <= sphere.r ;
   }
   
 } ;
@@ -990,21 +1112,21 @@ struct Triangle
   }
   
   // Triangle::intersectsSphere, triangle-sphere
-  bool intersectsSphere( const Vector3f& sphereCenter, float r ) const 
+  bool intersectsSphere( const Sphere& sphere ) const 
   {
     // rtcd page 168:
     // 1. test if the sphere intersects the plane of the polygon.  false if not
-    if( fabsf( plane.distanceToPoint( sphereCenter ) ) > r ) // if |_ distance to sphere center is FARther than radius, no hit
+    if( fabsf( plane.distanceToPoint( sphere.c ) ) > sphere.r ) // if |_ distance to sphere center is FARther than radius, no hit
       return false ;
     
     // 2. 3 ray sphere (this also tests any pts abc INSIDE tri)
-    if( Ray::intersectsSphere( a, b, sphereCenter, r ) ||
-        Ray::intersectsSphere( b, c, sphereCenter, r ) ||
-        Ray::intersectsSphere( a, c, sphereCenter, r ) )
+    if( Ray( a, b ).intersectsSphere( sphere ) ||
+        Ray( b, c ).intersectsSphere( sphere ) ||
+        Ray( c, a ).intersectsSphere( sphere ) )
       return true ;
       
     // 3. project sphere center into plane of polygon.  is projected pt in polygon?
-    return pointInside( plane.projectPointIntoPlane( sphereCenter ) ) ;
+    return pointInside( plane.projectPointIntoPlane( sphere.c ) ) ;
   }
   
   
@@ -1307,68 +1429,6 @@ struct PrecomputedTriangle
 
 
 
-// a collideable sphere
-struct Sphere
-{
-  Vector3f c ;
-  float r,r2 ;
-  
-  Sphere( const Vector3f& center, float radius )
-  {
-    c = center ;
-    r = radius ;
-    r2 = r*r;
-  }
-  
-  bool contains( const Vector3f& pt ) const {
-    // vector c to point's squared len INSIDE r2.
-    return (pt - c).len2() <= r2 ;
-  }
-  bool intersectsSphere( const Sphere& o ) const {
-    float dist2 = (o.c - c).len2() ;
-    return dist2 <= ( r2 + o.r2 ) ;
-  }
-  bool intersectsSphere( const Sphere& o, float& dist2 ) const {
-    dist2 = (o.c - c).len2() ;
-    return dist2 <= ( r2 + o.r2 ) ;
-  }
-
-  // SEND ME SQUARE RADII
-  static bool intersectsSphere( const Vector3f& center1, float rSq1, const Vector3f& center2, float rSq2 )
-  {
-    float dist2 = (center2 - center1).len2() ;
-    return dist2 <= ( rSq1 + rSq2 ) ;
-  }
-  static bool intersectsSphere( const Vector3f& center1, float rSq1, const Vector3f& center2, float rSq2, float &dist2 )
-  {
-    dist2 = (center2 - center1).len2() ;
-    return dist2 <= ( rSq1 + rSq2 ) ;
-  }
-  
-  // SEND ME SQUARE RADII
-  static bool intersectsSphere( const Vector3f& center1, float rSq1, const Vector3f& center2, float rSq2, Vector3f& midPt )
-  {
-    midPt = center2 - center1 ; // I reuse this var.
-    float dist2 = midPt.len2() ;
-    midPt = center1 + midPt/2.f ; //MIDPOINT
-    return dist2 <= ( rSq1 + rSq2 ) ;
-  }
-  
-  // b/c spheres can't be made ununiform scale is only a float
-  Sphere operator*( float scale ) const {
-    return Sphere( c*scale, r*scale ) ;
-  }
-  Sphere operator/( float scale ) const {
-    return Sphere( c/scale, r/scale ) ;
-  }
-  
-  // provided in DynamicTriangle
-  //static bool intersects( const DynamicTriangle& tri, const Vector3f& center, float r ){
-    // 3 ray-tri intersections 
-  //  return tri.intersects( center, r ) ;
-  //}
-  
-} ;
 
 
 
@@ -1689,9 +1749,79 @@ public:
     return box ;
   }
   
-  bool intersects( const AABB& aabb ) const ;
+  //Frustum::intersectsAABB
+  bool intersectsAABB( const AABB& aabb ) const
+  {
+    // SAT:
+    // project onto 5+3 axes:
+    // (frustum 6-1 and cube 6-3)
+     
+    // 3 cube axes
+    float cubeMin,cubeMax,frustumMin,frustumMax;
+    
+    for( int i = 0 ; i < AABB::SATAxes.size() ; i++ )
+    {
+      //SATtest( AABB::SATAxes[i], corners, frustumMin, frustumMax ) ;
+      // actually can optimize this a bit by picking out the min/max elt
+      frustumMin=HUGE,frustumMax=-HUGE;
+      for( int j = 0 ; j < corners.size() ; j++ )
+      {
+        if( corners[j].elts[i] < frustumMin )  frustumMin=corners[j].elts[i];
+        if( corners[j].elts[i] > frustumMax )  frustumMax=corners[j].elts[i];
+      }
+      
+      // we "cheat" here and just pick out the correct index.  b/c
+      // SATAxes[0] is the x axis, so we can just pick out the max/min
+      // from the AABB max/min members.
+      cubeMin=aabb.min.elts[i] ;
+      cubeMax=aabb.max.elts[i] ;
+      
+      // FAIL! there is not an overlap in at least 1 axis.
+      // SAT says NO INTERSECTION.
+      if( !overlaps( frustumMin, frustumMax, cubeMin, cubeMax ) )
+      {
+        return 0 ;
+      }
+    }
+    
+    // Ok, if the cheaper (cube) tests failed, then test the 5 unique
+    // sides of the frustum (I consider the frustum as a square based pyramid, I don't test the near plane)
+    // if you're using true corners, SKIP the near plane 
+    for( int i = useTrueCorners ; i < planes.size() ; i++ )
+    {
+      Vector3f axis=planes[i].normal ;
+      
+      // because the axis is NOT axis aligned, there is a more thorough test needed for the cube
+      // (an actual projection)
+      SATtest( axis, aabb.corners, cubeMin, cubeMax ) ;
+      SATtest( axis, corners, frustumMin, frustumMax ) ;
+      if( !overlaps( frustumMin, frustumMax, cubeMin, cubeMax ) )
+      {
+        return 0 ;
+      }
+    }
+    
+    // there are overlaps in ALL axes, so the objects intersect.
+    return 1 ;
+  }
   
-  bool intersects( const Sphere& sphere ) const ;
+  //Frustum::intersectsSphere
+  bool intersectsSphere( const Sphere& sphere ) const
+  {
+    // Get the closest point on the frustum to the sphere.
+    // (consider the frustum as a convex hull and just construct tris)
+    
+    // OR check i'm within sphere.r of each plane
+    for( int i = useTrueCorners ; i < planes.size() ; i++ )
+    {
+      float dist = planes[i].distanceToPoint( sphere.c ) ;
+      
+      // If the sphere is way outside one of the planes, it doesn't hit the frustum.
+      if( dist > sphere.r )  return 0 ;
+    }
+    
+    return 1 ; // sphere hits the frustum.
+  }
   
   void drawPermDebugLines()
   {
@@ -1745,7 +1875,6 @@ public:
     addPermDebugQuadSolid( a,farA,farB,b, Blue*Vector4f(1,1,1,0.5) ) ;
     addPermDebugQuadSolid( b,farB,farC,c, Yellow*Vector4f(1,1,1,0.5) ) ;
     addPermDebugQuadSolid( c,farC,farD,d, Red*Vector4f(1,1,1,0.5) ) ;
-    
   }
 } ;
 

@@ -6,10 +6,12 @@ vector<Vector3f> AABB::SATAxes = AABB::initSATAxes() ;
 AABB::AABB( const Sphere& sphere ) {
   min = sphere.c - sphere.r ;
   max = sphere.c + sphere.r ;
+  recomputeCorners() ;
 }
 
 template <typename T> AABB::AABB( const vector<T>& verts ) {
   bound( verts ) ; 
+  recomputeCorners() ; // redundant -- currently called for every vertex bound
 }
 
 
@@ -21,7 +23,9 @@ template <typename T> AABB::AABB( const vector<T>& verts ) {
 template <typename T> void AABB::bound( const vector<T>& verts ) {
   for( int i = 0 ; i < verts.size() ; i++ )
     bound( verts[i].pos ) ;
+  recomputeCorners() ; // redundant -- currently called for every vertex bound
 }
+
 void AABB::bound( const Vector3f& vertex ) {
   //min.clamp( min, vertex ) ;
   //max.clamp( vertex, max ) ;
@@ -35,6 +39,10 @@ void AABB::bound( const Vector3f& vertex ) {
   if( max.x < vertex.x ) max.x = vertex.x ; // max.x pushed out to include vertex.x - ie max.x clamped ABOVE by vertex.x
   if( max.y < vertex.y ) max.y = vertex.y ;
   if( max.z < vertex.z ) max.z = vertex.z ;
+  
+  recomputeCorners() ; // it's very dangerous to forget to recompute corners.
+  // although this has a performance hit, troublesome bugs can easily appear in sat testing
+  // if you forget to recompute corners after you're done bounding a group of points in a 1-by-1 fashion.
 }
 
 
@@ -322,12 +330,11 @@ vector<AABB> AABB::split8() const
 
 
 // don't use an offset
-void AABB::drawDebug( const Vector3f& color ) const
+void AABB::drawDebugSolid( const Vector4f& color ) const
 {
-  
+  addDebugBoxSolid( min, max, color ) ;
   
   /*
-  Geometry::makeLineCube( 
   addPermDebugLine( a, Vector4f(1,0,0,1), b, Vector4f(1,1,0,1) );
   addPermDebugLine( b, Vector4f(1,1,0,1), c, Vector4f(1,0,1,1) );
   addPermDebugLine( c, Vector4f(1,0,1,1), d, Vector4f(1,1,1,1) );
@@ -345,6 +352,12 @@ void AABB::drawDebug( const Vector3f& color ) const
   addPermDebugLine( d, Vector4f(1,1,1,1), farD, Vector4f(1,1,1,1) );
   */
 }
+
+void AABB::drawDebugLines( const Vector4f& color ) const
+{
+  addDebugBoxLine( min, max, color ) ;
+}
+
 
 // A convenience method to get the lines
 //void AABB::generateDebugLines( const Vector3f& offset, const Vector3f& color ) const ;

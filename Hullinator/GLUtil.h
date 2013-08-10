@@ -76,9 +76,14 @@ extern void addPermDebugQuadSolid( const Vector3f& a, const Vector3f& b, const V
 
 extern void addDebugSphereLine( const Vector3f& center, float r, const Vector4f& color ) ;
 extern void addPermDebugSphereLine( const Vector3f& center, float r, const Vector4f& color ) ;
-
 extern void addDebugSphereSolid( const Vector3f& center, float r, const Vector4f& color ) ;
 extern void addPermDebugSphereSolid( const Vector3f& center, float r, const Vector4f& color ) ;
+
+extern void addDebugBoxLine( const Vector3f& min, const Vector3f& max, const Vector4f& color ) ;
+extern void addPermDebugBoxLine( const Vector3f& min, const Vector3f& max, const Vector4f& color ) ;
+extern void addDebugBoxSolid( const Vector3f& min, const Vector3f& max, const Vector4f& color ) ;
+extern void addPermDebugBoxSolid( const Vector3f& min, const Vector3f& max, const Vector4f& color ) ;
+
 
 extern vector<VertexPC> debugPoints, debugPointsPerm, debugLines, debugLinesPerm ;
 extern vector<VertexPNC> debugTris, debugTrisPerm ;

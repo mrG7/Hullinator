@@ -45,6 +45,8 @@
 // I call them by their windows names, on mac gets renamed
 #define VK_RIGHT kVK_RightArrow
 #define VK_LEFT kVK_LeftArrow
+#define VK_UP kVK_UpArrow
+#define VK_DOWN kVK_DownArrow
 #endif
 #include "GLUtil.h"
 #include "StdWilUtil.h"
@@ -58,7 +60,7 @@ int w=768, h=768 ;// window width and height.
 #include "Message.h"
 
 static float mx, my, sbd=100.f,ptSize=1.f,lineWidth=1.f ;
-bool showOriginalPoints=0;
+bool showOriginalPoints=0, axisLinesOn=1;
 vector<Vector3f> pointCloud1,pointCloud2 ;
 Vector4f lightPos0, lightPos1, lightPos2, lightPos3 ;
 Frustum frustum(w,h) ;
@@ -66,20 +68,25 @@ int pointsPerCloud = 35 ;
 
 const char* ModeName[] = {
   "Hull-hull",
-  "Sphere-hull",
   "Hull-tri",
   "Tri-tri",
+  "Sphere-hull",
+  "Sphere-tri",
+  "Hull-AABB",
   "Plane-plane-plane"
 } ;
 enum Mode{
-  HullHull, SphereHull, HullTri, TriTri, PlanePlanePlane
-  
+  HullHull, HullTri, TriTri, 
+  SphereHull, SphereTri, HullAABB,
+    
+  PlanePlanePlane // LEAVE PlanePlanePlane LAST, its used to determine #modes
 } ;
 int mode = 0 ;
 
 Hull hull1,hull2 ;
 Triangle tri1(0,0,0), tri2(0,0,0),
 planeTri1(0,0,0),planeTri2(0,0,0),planeTri3(0,0,0) ; // huge tris used as planes
+Sphere sphere1 ;
 
 void regenHulls()
 {
@@ -132,15 +139,21 @@ void help()
       msg( "instr1", "(m) makes new point clouds.  +/- to change # pts per cloud." ) ;
       msg( "instr2", "holding (r) jiggles the clouds. (e) shows the original points that made up the hull." ) ;
       break;
-    case Mode::SphereHull:
-      msg( "instr1", "left/right arrows to grow/shrink sphere. Also (m), (+/-)" ) ;
-      break ;
     case Mode::HullTri:
       msg( "instr1", "left/right arrows to spin tri. Also (m), (+/-)" ) ;
       break;
     case Mode::TriTri:
       msg( "instr1", "left/right arrows to spin tris. (2) for wireframe." ) ;
       break;
+    case Mode::SphereHull:
+      msg( "instr1", "left/right arrows to grow/shrink sphere. up/down to move in/out. Also (m), (+/-)" ) ;
+      break ;
+    case Mode::SphereTri:
+      msg( "instr1", "" ) ;
+      break ;
+    case Mode::HullAABB:
+      msg( "instr1", "left/right/up/down arrows to move aabb. (r) jiggles, also (m), (+/-)" ) ;
+      break ;
     case Mode::PlanePlanePlane:
       msg( "instr1", "Intn is yellow pt.  CTRL+Click to fire rays at the planes." ) ;
       break;  
@@ -183,59 +196,6 @@ void hullHullTest()
   }
 }
 
-void sphereHullTest()
-{
-  // move a pt around,
-  static float ang=0.f;
-  Vector3f pt = Matrix3f::rotationY( ang+=0.0001f ) * Vector3f( 20,20*sin(ang/3.f),20 ) ;
-  
-  static float r = 3.f ;
-  if( IS_KEYDOWN( VK_RIGHT ) )
-    r += 0.01f ;
-  if( IS_KEYDOWN( VK_LEFT ) )
-    r -= 0.01f ;
-  
-  Vector3f closestPtOnHull ;
-  if( hull1.intersectsSphere( pt, r, closestPtOnHull ) ) {
-    hull1.drawDebug( Red ) ;
-    addDebugLine( pt, closestPtOnHull, Red ) ;
-    addDebugSphereSolid( pt, r, Purple ) ;
-  }
-  else {
-    hull1.drawDebug( Vector4f(0,0,1,0.75) ) ;
-    addDebugLine( pt, closestPtOnHull, Yellow ) ;
-    addDebugSphereSolid( pt, r, Blue ) ;
-  }
-}
-
-void sphereTriTest()
-{
-  // move a pt around,
-  static float ang=0.f;
-  Vector3f pt = Matrix3f::rotationY( ang+=0.0001f ) * Vector3f( 20,20*sin(ang/3.f),20 ) ;
-  
-  Matrix3f rot = Matrix3f::rotationY( ang*10.f ) ; // * Matrix3f::rotationX( M_PI- ang ) ;
-  tri1 = Triangle( rot*Vector3f( -20,0,5 ), rot*Vector3f( 20,0,5 ), rot*Vector3f( 0,20,-5 ) ) ;
-  
-  static float r = 3.f ;
-  if( IS_KEYDOWN( VK_RIGHT ) )
-    r += 0.01f ;
-  if( IS_KEYDOWN( VK_LEFT ) )
-    r -= 0.01f ;
-  
-  Vector3f closestPtOnHull ;
-  if( tri1.intersectsSphere( pt, r ) ) {
-    hull1.drawDebug( Red ) ;
-    addDebugLine( pt, closestPtOnHull, Red ) ;
-    addDebugSphereSolid( pt, r, Purple ) ;
-  }
-  else {
-    hull1.drawDebug( Vector4f(0,0,1,0.75) ) ;
-    addDebugLine( pt, closestPtOnHull, Yellow ) ;
-    addDebugSphereSolid( pt, r, Blue ) ;
-  }
-}
-
 void hullTriTest()
 {
   static float ang = 0.f;
@@ -255,32 +215,6 @@ void hullTriTest()
     addDebugTriSolid( tri1, Blue ) ;
     hull1.drawDebug( Vector4f(0,0,1,0.75) ) ;
   }
-}
-
-void planePlanePlaneTest()
-{
-  static float a = 0.f;
-  a += 0.001f;
-  
-  // very large triangles (planes essentially)
-  planeTri1 = Triangle( Vector3f( -500, -500, 0* sinf(a) ), Vector3f( 500, -500, 25 * sinf(a) ), Vector3f( 0, 500, -30* sinf(a) ) ) ;
-  addDebugTriSolid( planeTri1, Vector4f( 1,0,0,0.5f ) ) ;
-  
-  planeTri2 = Triangle( Vector3f( -40, -500, 500 ), Vector3f( 50, -500, -500 ), Vector3f( 5, 500, -10 ) ) ;
-  addDebugTriSolid( planeTri2, Vector4f( 0,0,1,0.5f ) ) ;
-
-  planeTri3 = Triangle( Vector3f( -500, 4, 300 ), Vector3f( 500, 7, 500 ), Vector3f( 0, 12, -500 ) ) ;
-  addDebugTriSolid( planeTri3, Vector4f( 0,1,0,0.5f ) ) ;
-  
-  // Test plane-plane-plane intn
-  Vector3f pt = Plane::getIntersection( planeTri1.plane, planeTri2.plane, planeTri3.plane ) ;
-  addDebugPoint( pt, Yellow ) ; // the startpos of the ray is the intn pt of the 3 planes.
-
-  // the direction vector i want to run a line along is along the intersection line
-  // of 2 of the planes.
-  Vector3f dir = planeTri1.plane.normal.cross( planeTri2.plane.normal ).normalize() ;
-  addDebugLine( pt + dir*-500.f, pt + dir*500.f, Yellow ) ; // draw ray really long along intn line
-  
 }
 
 void triTriTest()
@@ -312,6 +246,124 @@ void triTriTest()
   }
 }
 
+void sphereHullTest()
+{
+  // move a pt around,
+  static float ang=0.f;
+  static float sphereDist=20.f;
+  if( IS_KEYDOWN( VK_UP ) )
+    sphereDist += 0.01f ;
+  if( IS_KEYDOWN( VK_DOWN ) )
+    sphereDist -= 0.01f ;
+  
+  Vector3f pt = Matrix3f::rotationY( ang+=0.0001f ) * Vector3f( sphereDist,sphereDist*sin(ang/3.f),sphereDist ) ;
+  
+  static float r = 3.f ;
+  if( IS_KEYDOWN( VK_RIGHT ) )
+    r += 0.01f ;
+  if( IS_KEYDOWN( VK_LEFT ) )
+    r -= 0.01f ;
+  
+  sphere1 = Sphere( pt, r ) ;
+  Vector3f closestPtOnHull ;
+  if( hull1.intersectsSphere( sphere1 ) ) {
+    hull1.drawDebug( Red ) ;
+    //addDebugLine( pt, closestPtOnHull, Red ) ;
+    addDebugSphereSolid( pt, r, Purple ) ;
+  }
+  else {
+    hull1.drawDebug( Vector4f(0,0,1,0.75) ) ;
+    //addDebugLine( pt, closestPtOnHull, Yellow ) ;
+    addDebugSphereSolid( pt, r, Blue ) ;
+  }
+}
+
+void sphereTriTest()
+{
+  // move a pt around,
+  static float ang=0.f;
+  Vector3f pt = Matrix3f::rotationY( ang+=0.0001f ) * Vector3f( 20,20*sin(ang/3.f),20 ) ;
+  
+  Matrix3f rot = Matrix3f::rotationY( ang*10.f ) ; // * Matrix3f::rotationX( M_PI- ang ) ;
+  tri1 = Triangle( rot*Vector3f( -20,0,5 ), rot*Vector3f( 20,0,5 ), rot*Vector3f( 0,20,-5 ) ) ;
+  
+  static float r = 3.f ;
+  if( IS_KEYDOWN( VK_RIGHT ) )
+    r += 0.01f ;
+  if( IS_KEYDOWN( VK_LEFT ) )
+    r -= 0.01f ;
+  
+  sphere1 = Sphere( pt,r ) ;
+  
+  Vector3f closestPtOnHull ;
+  if( tri1.intersectsSphere( sphere1 ) ) {
+    addDebugTriSolid( tri1, Red ) ;
+    addDebugSphereSolid( pt, r, Purple ) ;
+  }
+  else {
+    addDebugTriSolid( tri1, Green ) ;
+    addDebugSphereSolid( pt, r, Blue ) ;
+  }
+}
+
+void hullAABBTest()
+{
+  float move=0.01f;
+  Vector3f offsets ;
+  if( IS_KEYDOWN( VK_UP ) )
+    offsets.y += move;
+  if( IS_KEYDOWN( VK_DOWN ) )
+    offsets.y -= move;
+  if( IS_KEYDOWN( VK_RIGHT ) )
+    offsets.x += move;
+  if( IS_KEYDOWN( VK_LEFT ) )
+    offsets.x -= move;
+
+  for( int i = 0 ; i < pointCloud2.size() ; i++ )
+    pointCloud2[i] += offsets ;
+  
+  hull2 = Hull( pointCloud2 ) ; // you have ot regen the cloud, and so the aabb.
+  
+  // use the 2nd hull's aabb
+  if( hull1.intersectsAABB( hull2.aabb ) )
+  {
+    hull1.drawDebug( Vector4f(1,0,1,0.75) ) ;
+    hull2.aabb.drawDebugSolid( Red ) ;
+  }
+  else
+  {
+    hull1.drawDebug( Vector4f(0,0,1,0.75) ) ;
+    hull2.aabb.drawDebugSolid( Blue ) ;
+  }
+}
+
+
+
+void planePlanePlaneTest()
+{
+  static float a = 0.f;
+  a += 0.001f;
+  
+  // very large triangles (planes essentially)
+  planeTri1 = Triangle( Vector3f( -500, -500, 0* sinf(a) ), Vector3f( 500, -500, 25 * sinf(a) ), Vector3f( 0, 500, -30* sinf(a) ) ) ;
+  addDebugTriSolid( planeTri1, Vector4f( 1,0,0,0.5f ) ) ;
+  
+  planeTri2 = Triangle( Vector3f( -40, -500, 500 ), Vector3f( 50, -500, -500 ), Vector3f( 5, 500, -10 ) ) ;
+  addDebugTriSolid( planeTri2, Vector4f( 0,0,1,0.5f ) ) ;
+
+  planeTri3 = Triangle( Vector3f( -500, 4, 300 ), Vector3f( 500, 7, 500 ), Vector3f( 0, 12, -500 ) ) ;
+  addDebugTriSolid( planeTri3, Vector4f( 0,1,0,0.5f ) ) ;
+  
+  // Test plane-plane-plane intn
+  Vector3f pt = Plane::getIntersection( planeTri1.plane, planeTri2.plane, planeTri3.plane ) ;
+  addDebugPoint( pt, Yellow ) ; // the startpos of the ray is the intn pt of the 3 planes.
+
+  // the direction vector i want to run a line along is along the intersection line
+  // of 2 of the planes.
+  Vector3f dir = planeTri1.plane.normal.cross( planeTri2.plane.normal ).normalize() ;
+  addDebugLine( pt + dir*-500.f, pt + dir*500.f, Yellow ) ; // draw ray really long along intn line
+  
+}
 
 void draw()
 {
@@ -323,21 +375,24 @@ void draw()
   // Which test mode are you running?
   switch( mode )
   {
-  case HullHull:
+  case Mode::HullHull:
     hullHullTest() ;
     break;
-  
+  case Mode::HullTri:
+    hullTriTest() ;
+    break ;
+  case Mode::TriTri:
+    triTriTest() ;
+    break ;
   case Mode::SphereHull:
     sphereHullTest() ;
     break; 
-  case HullTri:
-    hullTriTest() ;
+  case Mode::SphereTri:
+    sphereTriTest() ;
     break ;
-    
-  case TriTri:
-    triTriTest() ;
+  case Mode::HullAABB:
+    hullAABBTest() ;
     break ;
-    
   case PlanePlanePlane:
     planePlanePlaneTest() ;
     break ;
@@ -383,7 +438,8 @@ void draw()
   //frustum.drawDebug() ;
     
   glLineWidth( 1.f ) ;
-  drawAxisLines() ;
+  if( axisLinesOn )
+    drawAxisLines() ;
   glLineWidth( lineWidth ) ;
   
   // LIGHTS, 
@@ -468,6 +524,26 @@ bool testHitTri( const Triangle& tri, const Ray& ray )
   return hitTri ;
 }
 
+bool testHitAABB( const AABB& aabb, const Ray& ray )
+{
+  Vector3f pt ;
+  bool hit = aabb.intersectsRay( ray, pt ) ;
+  if( hit )
+    addPermDebugPoint( pt, Red ) ;
+  return hit ;
+}
+
+bool testHitSphere( const Sphere& sphere, const Ray& ray )
+{
+  Vector3f pt1, pt2 ;
+  bool hit = ray.intersectsSphere( sphere, pt1, pt2 ) ;
+  if( hit ) {
+    addPermDebugPoint( pt1, Yellow ) ;
+    addPermDebugPoint( pt2, Red ) ;
+  }
+  return hit ;
+}
+
 bool testHitPlane( const Plane& plane, const Ray& ray )
 {
   Vector3f pt ;
@@ -497,23 +573,38 @@ void mouse( int button, int state, int x, int y )
     // Which test mode are you running?
     switch( mode )
     {
-    case HullHull:
+    case Mode::HullHull:
       // both hull1 and hull2 are visible
       rayHits |= testHitHull( hull1, ray ) ;
       rayHits |= testHitHull( hull2, ray ) ;
       break;
       
-    case HullTri:
+    case Mode::HullTri:
       rayHits |= testHitHull( hull1, ray ) ;
       rayHits |= testHitTri( tri1, ray ) ;
       break ;
       
-    case TriTri:
+    case Mode::TriTri:
       rayHits |= testHitTri( tri1, ray ) ;
       rayHits |= testHitTri( tri2, ray ) ;
       break ;
       
-    case PlanePlanePlane:
+    case Mode::SphereHull:
+      rayHits |= testHitSphere( sphere1, ray ) ;
+      rayHits |= testHitHull( hull1, ray ) ;
+      break ;
+      
+    case Mode::SphereTri:
+      rayHits |= testHitSphere( sphere1, ray ) ;
+      rayHits |= testHitTri( tri1, ray ) ;
+      break ;
+      
+    case Mode::HullAABB:
+      rayHits |= testHitHull( hull1, ray ) ;
+      rayHits |= testHitAABB( hull2.aabb, ray ) ;
+      break ;
+      
+    case Mode::PlanePlanePlane:
       rayHits |= testHitPlane( planeTri1.plane, ray ) ;
       rayHits |= testHitPlane( planeTri2.plane, ray ) ;
       rayHits |= testHitPlane( planeTri3.plane, ray ) ;
@@ -552,6 +643,10 @@ void keyboard( unsigned char key, int x, int y )
     }
     else  glPolygonMode( GL_FRONT_AND_BACK, GL_FILL ) ;
     }
+    break ;
+    
+  case '7':
+    axisLinesOn = !axisLinesOn ;
     break ;
     
   case '=':

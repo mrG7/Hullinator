@@ -333,23 +333,39 @@ void addDebugSphereLine( const Vector3f& center, float r, const Vector4f& color 
 {
   // add 60 verts on for the 30 lines that will be added.
   //Game->renderer->debugLines->data.resize( Game->renderer->debugLines->data.size() + 60 ) ;
-  Geometry::makeWireframeSphere( debugLines, center, r, color ) ;
+  Geometry::addSphereLines( debugLines, center, r, color ) ;
 }
 void addPermDebugSphereLine( const Vector3f& center, float r, const Vector4f& color )
 {
   // add 60 verts on for the 30 lines that will be added.
   //Game->renderer->debugLinesPerm->data.resize( Game->renderer->debugLinesPerm->data.size() + 60 ) ;
-  Geometry::makeWireframeSphere( debugLinesPerm, center, r, color ) ;
+  Geometry::addSphereLines( debugLinesPerm, center, r, color ) ;
 }
 
 void addDebugSphereSolid( const Vector3f& center, float r, const Vector4f& color )
 {
   // I'm using 2 subdivs to make the sphere extra round.  since this is only debug code for
   // viz i don't care about efficiency here.
-  Geometry::makeSphereSubdiv( debugTris, center, r, color, 2 ) ;
+  Geometry::addSphereSubdiv( debugTris, center, r, color, 2 ) ;
 }
 void addPermDebugSphereSolid( const Vector3f& center, float r, const Vector4f& color )
 {
-  Geometry::makeSphereSubdiv( debugTrisPerm, center, r, color, 2 ) ;
+  Geometry::addSphereSubdiv( debugTrisPerm, center, r, color, 2 ) ;
+}
+
+void addDebugBoxLine( const Vector3f& min, const Vector3f& max, const Vector4f& color ){
+  Geometry::addCubeLine( debugLines, min, max, color ) ;
+}
+
+void addPermDebugBoxLine( const Vector3f& min, const Vector3f& max, const Vector4f& color ){
+  Geometry::addCubeLine( debugLinesPerm, min, max, color ) ;
+}
+
+void addDebugBoxSolid( const Vector3f& min, const Vector3f& max, const Vector4f& color ){
+  Geometry::addCube( debugTris, min, max, color, 1 ) ;
+}
+
+void addPermDebugBoxSolid( const Vector3f& min, const Vector3f& max, const Vector4f& color ){
+  Geometry::addCube( debugTrisPerm, min, max, color, 1 ) ;
 }
 

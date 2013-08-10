@@ -624,11 +624,16 @@ public:
     // this SAT test seems to have some accuracy issues, with detecting false +
     // See https://github.com/superwills/Hullinator/issues/1
     float meMin, meMax, oMin, oMax ;
-    // Start with tri normal.  Only need to test 1 pt from tri, since all 3 will collapse to same pt.
+
+    // Start with tri normal.
     SATtest( tri.plane.normal, finalPts, meMin, meMax ) ;
-    SATtest( tri.plane.normal, &tri.a, 3, oMin, oMax ) ;
-    if( !overlaps( meMin, meMax, oMin, oMax ) )
+    SATtest( tri.plane.normal, tri.a, oMin, oMax ) ; //Only need to test 1 pt from tri, since all 3 will collapse to same pt.
+    
+    if( !overlaps( meMin, meMax, oMin, oMax ) ) {
+      addDebugLine( tri.plane.normal*meMin, tri.plane.normal*meMax, Red ) ;
+      addDebugPoint( tri.plane.normal*oMin, Blue ) ;
       return 0 ;
+    }
   
     // Now test the hull's normals against tri's pts
     //vector<Vector3f> triPts ;
@@ -637,8 +642,12 @@ public:
     {
       SATtest( finalNormals[i], finalPts, meMin, meMax ) ;
       SATtest( finalNormals[i], &tri.a, 3, oMin, oMax ) ;
-      if( !overlaps( meMin, meMax, oMin, oMax ) )
+      
+      if( !overlaps( meMin, meMax, oMin, oMax ) ) {
+        addDebugLine( finalNormals[i]*meMin, finalNormals[i]*meMax, Red ) ;
+        addDebugLine( finalNormals[i]*oMin, finalNormals[i]*oMax, Blue ) ;
         return 0 ;
+      }
     }
     
     return 1 ;
@@ -651,16 +660,6 @@ public:
     //*/
   }
 
-    
-  bool intersectsSphere( const Vector3f& center, float r, Vector3f& closestPtOnHull ) const {
-    return distanceToClosestPointOnHull( center, closestPtOnHull ) <= r ;
-  }
-  
-  inline bool intersectsSphere( const Vector3f& center, float r ) const {
-    Vector3f closestPtOnHull ;
-    return intersectsSphere( center, r, closestPtOnHull ) ;
-  }
-  
   bool intersectsHull( const Hull& o ) const {
     // Get the normals for one of the shapes,
     float meMin, meMax, oMin, oMax ;
@@ -685,6 +684,65 @@ public:
     
     // if overlap occurred in ALL AXES, then they do intersect
     return 1 ;
+  }
+  
+  // SAT test
+  bool intersectsAABB( const AABB& aabb ) const {
+    // SAT:
+    // 3 cube axes
+    float meMin, meMax, oMin, oMax ;
+    
+    for( int axis = 0 ; axis < 3 ; axis++ )
+    {
+      // because we're projecting points in 3 space TO THE PRINCIPAL AXES,
+      // the span of the projection of all the vertices is just going to be
+      // the min/max in each priniciple axis direction.
+      meMin=HUGE,meMax=-HUGE ; // init these here
+      for( int j = 0 ; j < finalPts.size() ; j++ )
+      {
+        if( finalPts[j].elts[axis] < meMin )  meMin=finalPts[j].elts[axis];
+        if( finalPts[j].elts[axis] > meMax )  meMax=finalPts[j].elts[axis];
+      }
+      
+      // we "cheat" here and just pick out the correct index for the aabb.
+      // its axis aligned!
+      oMin=aabb.min.elts[axis] ;
+      oMax=aabb.max.elts[axis] ;
+      if( !overlaps( meMin, meMax, oMin, oMax ) )
+        return 0 ;
+    }
+    
+    // Ok, if the cheaper (aabb) tests didn't fail,
+    // then test the hull's planes
+    for( int i = 0 ; i < finalNormals.size() ; i++ )
+    {
+      SATtest( finalNormals[i], finalPts, meMin, meMax ) ;
+      SATtest( finalNormals[i], aabb.corners, oMin, oMax ) ;
+      if( !overlaps( meMin, meMax, oMin, oMax ) )
+        return 0 ;
+    }
+    
+    return 1 ;
+  }
+  
+  bool intersectsSphere( const Sphere& sphere, Vector3f& closestPtOnHull ) const {
+    // Get the closest point on the hull to the sphere.
+    // that point must be within r. This is MUCH MORE EXPENSIVE than the simple boolean test below.
+    return distanceToClosestPointOnHull( sphere.c, closestPtOnHull ) <= sphere.r ;
+  }
+  
+  bool intersectsSphere( const Sphere& sphere ) const {
+    // Can use an INSIDE test, similar to sphere frustum.
+    // OR check i'm within sphere.r of each plane
+    for( int i = 0 ; i < finalTris.size() ; i++ )
+    {
+      float dist = finalTris[i].plane.distanceToPoint( sphere.c ) ;
+      
+      // If the sphere is way outside one of the planes, it doesn't hit the hull.
+      if( dist > sphere.r )  return 0 ;
+    }
+    
+    return 1 ; // sphere hits the hull or is inside the hull.
   }
   
   // rtcd pg 199

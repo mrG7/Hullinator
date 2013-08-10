@@ -13,7 +13,6 @@ extern void addPermDebugLine( const Vector3f& a, const Vector4f& cA, const Vecto
 
 struct AABB
 {
-
   Vector3f min, max ;
   // NOT caching 'extents' because it's not used a lot
   // and it's like more memory for no reason.
@@ -46,6 +45,9 @@ struct AABB
     min.x=min.y=min.z= HUGE ;
     max.x=max.y=max.z=-HUGE ;
   }
+  
+  // These are very important to keep up to date.  on every change to the aabb you
+  // need to recompute corners.  Used in SAT testing.
   void recomputeCorners()
   {
     corners.clear() ;
@@ -61,6 +63,9 @@ struct AABB
     corners.push_back( Vector3f( max.x,max.y,max.z ) ) ; // H
   }
   
+  // dyah, the aabb only has these 3 axes. checking
+  // overlap in -x in a SAT test is redundant with checking +x,
+  // because if they don't overlap in x, they don't overlap in +x.
   static vector<Vector3f> initSATAxes()
   {
     vector<Vector3f> axes ;
@@ -79,10 +84,12 @@ struct AABB
   
   inline AABB& operator*=( const Vector3f& scale ) {
     min*=scale ;  max*=scale ;
+    recomputeCorners() ;
     return *this ;
   }
   inline AABB& operator/=( const Vector3f& scale ) {
     min/=scale ;  max/=scale ;
+    recomputeCorners() ;
     return *this ;
   }
   
@@ -113,7 +120,7 @@ struct AABB
 
   // point in the middle of box
   inline Vector3f mid() const {
-    return ( min + max ) / 2 ;
+    return ( min + max ) / 2.f ;
   }
   
   // named contains because that's what it really is.
@@ -132,8 +139,6 @@ struct AABB
     return oaabb.min.isBetween( min, max ) && 
            oaabb.max.isBetween( min, max ) ;
   }
-  
-  
   
   // Intersection methods:
   bool intersectsAABB( const AABB& o ) const ;
@@ -175,7 +180,7 @@ struct AABB
     return AABB( min/s, max/s ) ;
   }
   
-  AABB scale( float scale ) const{
+  AABB scale( float scale ) const {
     // Keep it CENTERED
     Vector3f center = mid() ;
     Vector3f range = extents() ;
@@ -185,7 +190,8 @@ struct AABB
   }
   
   // don't use an offset
-  void drawDebug( const Vector3f& color ) const ;
+  void drawDebugSolid( const Vector4f& color ) const ;
+  void drawDebugLines( const Vector4f& color ) const ;
 
   // A convenience method to get the lines
   //void drawDebug( const Vector3f& offset, const Vector3f& color ) const ;
