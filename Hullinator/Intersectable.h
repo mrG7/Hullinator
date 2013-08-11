@@ -745,6 +745,8 @@ struct Triangle
   Vector3f centroid ;
   Plane plane ; // I often need the plane.
   
+  Triangle() {}
+  
   // If you go ahead an construct the tirangle (instead of using the static fns)
   // then I'm goig to assume you need the plane.
   Triangle( const Vector3f& ia, const Vector3f& ib, const Vector3f& ic ) :
@@ -932,6 +934,47 @@ struct Triangle
   inline float distanceToPoint( const Vector3f& pt, Vector3f& closestPtOnTri ) const {
     closestPtOnTri = closestPointOnTri( pt ) ;
     return (pt-closestPtOnTri).len() ;
+  }
+  
+  Sphere findCircumsphere() {
+    // http://mathworld.wolfram.com/Circumcircle.html (useless)
+    // See http://mathworld.wolfram.com/Circumsphere.html (useless)
+    //
+    // These are shewchuk's expressions from http://www.ics.uci.edu/~eppstein/junkyard/circumcenter.html
+    //     |                                                           |
+    //     | |c-a|^2 [(b-a)x(c-a)]x(b-a) + |b-a|^2 (c-a)x[(b-a)x(c-a)] |
+    //     |                                                           |
+    // r = -------------------------------------------------------------,
+    //                     2 | (b-a)x(c-a) |^2
+    
+    //     ( abXac.cross(ab)*ac.len2() + ab.len2()*ac.cross( abXac )).len() 
+    // r = -------------------------------------------------------------
+    //                     2.f*ab.cross(ac).len2()
+    
+    
+    //
+    //         |c-a|^2 [(b-a)x(c-a)]x(b-a) + |b-a|^2 (c-a)x[(b-a)x(c-a)]
+    // m = a + ---------------------------------------------------------.
+    //                           2 | (b-a)x(c-a) |^2
+    // m is the circumcenter
+    
+    // abXac = ab.cross(ac) ;
+    // m = a + ac.len2() * ( abXac ).cross(ab) + ab.len2() * ac.cross( abXac ) / 2.f*abXac.len2() ;
+    //                           
+    
+    Vector3f ac = c - a ;
+    Vector3f ab = b - a ;
+    Vector3f abXac = ab.cross( ac ) ;
+    
+    // this is the vector from a TO the circumsphere center
+    Sphere circumsphere ;
+    circumsphere.c = (abXac.cross( ab )*ac.len2() + ac.cross( abXac )*ab.len2()) / (2.f*abXac.len2()) ;
+    circumsphere.r2 = circumsphere.c.len2() ;
+    circumsphere.r = sqrtf( circumsphere.r2 ) ;
+    
+    circumsphere.c += a ; // now this is the actual 3space location
+    
+    return circumsphere ;
   }
   
   // yes/no intersection, barycentric coordinates of 
@@ -1186,6 +1229,16 @@ struct Triangle
   
 } ;
 
+Triangle operator*( const Matrix4f& matrix, const Triangle& tri ) ;
+
+
+
+
+
+
+
+
+
 
 
 // The same as a triangle, only it has some of the barycentric
@@ -1195,11 +1248,18 @@ struct PrecomputedTriangle
 {
   Vector3f a,b,c ;
   Vector3f nA, nB, nC ; // you can keep per-vertex normals for use in collision response
+  // if you don't initialize these, don't try to use them.
+
   Vector3f centroid ;
+  Sphere circumsphere ; // the circumsphere centroid is different from the triangle centroid
+  
   Plane plane ;
   Vector3f v0, v1 ;
   float d00,d01,d11,denomBary ;
   bool isDegenerate ;
+  
+  // I have to allow this so vectors of value-type PreTris are allowed.
+  PrecomputedTriangle() {}
   
   PrecomputedTriangle( const Vector3f& ia, const Vector3f& ib, const Vector3f& ic ) :
     a(ia),b(ib),c(ic),plane( ia, ib, ic ) {
@@ -1211,6 +1271,48 @@ struct PrecomputedTriangle
     nA(ina), nB(inb), nC(inc) {
     precompute() ;
   }
+  PrecomputedTriangle( const Triangle& iTri ) :
+    a(iTri.a),b(iTri.b),c(iTri.c),plane( iTri.plane ) {
+    precompute() ;
+  }
+  
+  void findCircumsphere() {
+    // http://mathworld.wolfram.com/Circumcircle.html (useless)
+    // See http://mathworld.wolfram.com/Circumsphere.html (useless)
+    //
+    // These are shewchuk's expressions from http://www.ics.uci.edu/~eppstein/junkyard/circumcenter.html
+    //     |                                                           |
+    //     | |c-a|^2 [(b-a)x(c-a)]x(b-a) + |b-a|^2 (c-a)x[(b-a)x(c-a)] |
+    //     |                                                           |
+    // r = -------------------------------------------------------------,
+    //                     2 | (b-a)x(c-a) |^2
+    
+    //     ( abXac.cross(ab)*ac.len2() + ab.len2()*ac.cross( abXac )).len() 
+    // r = -------------------------------------------------------------
+    //                     2.f*ab.cross(ac).len2()
+    
+    
+    //
+    //         |c-a|^2 [(b-a)x(c-a)]x(b-a) + |b-a|^2 (c-a)x[(b-a)x(c-a)]
+    // m = a + ---------------------------------------------------------.
+    //                           2 | (b-a)x(c-a) |^2
+    // m is the circumcenter
+    
+    // abXac = ab.cross(ac) ;
+    // m = a + ac.len2() * ( abXac ).cross(ab) + ab.len2() * ac.cross( abXac ) / 2.f*abXac.len2() ;
+    //                           
+    
+    Vector3f ac = c - a ;
+    Vector3f ab = b - a ;
+    Vector3f abXac = ab.cross( ac ) ;
+    
+    // this is the vector from a TO the circumsphere center
+    circumsphere.c = (abXac.cross( ab )*ac.len2() + ac.cross( abXac )*ab.len2()) / (2.f*abXac.len2()) ;
+    circumsphere.r2 = circumsphere.c.len2() ;
+    circumsphere.r = sqrtf( circumsphere.r2 ) ;
+    
+    circumsphere.c += a ; // now this is the actual 3space location
+  }
   
   // Precomputes plane, centroid, barycentric vals
   void precompute()
@@ -1221,6 +1323,7 @@ struct PrecomputedTriangle
     
     // centroid precomp
     centroid = (a + b + c) / 3.f ;
+    findCircumsphere() ;
     
     // Barycentric precomputations
     v0 = b-a, v1=c-a, 
@@ -1271,10 +1374,13 @@ struct PrecomputedTriangle
     return intersectsRay( ray, p, bary ) ;
   }
   
+  // PrecomputedTriangle::signedDistanceToPoint Finds you the closest point on the triangle to your 3space point.
   float signedDistanceToPoint( const Vector3f& pt, Vector3f& closestPtOnTri ) const //, int& type ) const
   {
-    //type=0;
+    // 1. First get the |_ distance to the triangle's plane.
     float dist ;  Vector3f bary ;
+    
+    // 2. that pt into plane of polygon.  is projected pt IN tri?
     if( pointInside( closestPtOnTri=plane.projectPointIntoPlane( pt, dist ), bary ) )
     {
       //addDebugPoint( closestPtOnTri, Magenta ) ; //FACE
@@ -1292,15 +1398,15 @@ struct PrecomputedTriangle
     int oBary1 = OTHERAXIS1( maxBary ), oBary2 = OTHERAXIS2( maxBary ) ;
     if( bary.elts[ oBary1 ] < 0.f && bary.elts[ oBary2 ] < 0.f )
     {
-      closestPtOnTri = (&a)[ maxBary ] ;
-      //addDebugPoint( closestPtOnTri, Yellow ) ; //CORNER
+      // Now the POINT is the one with maxBary
+      closestPtOnTri = (&a)[ maxBary ] ; // a,b, or c exactly.
       return signum(dist)*distance1( pt, closestPtOnTri ) ;
     }
     
     // otherwise, you're on an EDGE (but still possibly a corner)
-    //type=2;
-    int minBary = bary.minIndex() ;
+    int minBary = bary.minIndex() ; // this is the negative one.  the other 2 are +.
     oBary1 = OTHERAXIS1( minBary ), oBary2 = OTHERAXIS2( minBary ) ;
+    
     Ray edge( (&a)[oBary1], (&a)[oBary2] ) ;
     float t = edge.distanceToPoint( pt, closestPtOnTri ) ;
     
@@ -1341,16 +1447,16 @@ struct PrecomputedTriangle
   // PrecomputedTriangle::intersectsSphere
   // Triangle-sphere, but gets you the closest pt on the tri to the sphere
   // as well as the interpolated normal at that pt.
-  int intersectsSphere( const Vector3f& sphereCenter, float r, Vector3f& bary, Vector3f& closestPt, Vector3f& normalAtPt ) const {
+  int intersectsSphere( const Sphere& sphere, Vector3f& bary, Vector3f& closestPt, Vector3f& normalAtPt ) const {
     // rtcd page 168:
     // 1. test if the sphere intersects the plane of the polygon.  false if not
     // if |_ distance to sphere center is FARther than radius, no hit
-    float dist = plane.distanceToPoint( sphereCenter ) ;
-    if( fabsf( dist ) > r )
+    float dist = plane.distanceToPoint( sphere.c ) ;
+    if( fabsf( dist ) > sphere.r )
       return TriSphereNOINTERSECTION ;
 
     // 2. project sphere center into plane of polygon.  is projected pt in polygon?
-    if( pointInside( closestPt=plane.projectPointIntoPlane( sphereCenter ), bary ) )
+    if( pointInside( closestPt=plane.projectPointIntoPlane( sphere.c ), bary ) )
     {
       // You have to turn the normal around if you are behind the plane.
       normalAtPt = getInterpolatedNormal( bary ) * signum( dist ) ;
@@ -1375,7 +1481,7 @@ struct PrecomputedTriangle
       // alternatively you could evaluate at(bary), but that's a lot more multiplies and adds.
       
       // The tri point must be inside the sphere
-      if( distance2( sphereCenter, closestPt ) > r*r )
+      if( distance2( sphere.c, closestPt ) > sphere.r2 )
         return TriSphereNOINTERSECTION ;
       
       normalAtPt = (&nA)[ maxBary ] ; // just that normal
@@ -1389,7 +1495,7 @@ struct PrecomputedTriangle
     // OR you could just use the |_ distance (assuming only ONE is negative) between the ray
     // from the 2 pts there.
     Ray edge( (&a)[oBary1], (&a)[oBary2] ) ;
-    float t = edge.normalizedDistanceToPoint( sphereCenter, closestPt ) ;
+    float t = edge.normalizedDistanceToPoint( sphere.c, closestPt ) ;
     
     // Very important check: if you are OOB the ray then nail you to the vertex.
     // t GETS CLAMPED HERE, so use in fetching interpolated normal below remains correct.
@@ -1397,7 +1503,7 @@ struct PrecomputedTriangle
     else if( t > 1.f ) { t=1.f, closestPt=(&a)[oBary2]; }
     
     //printf( "Normalized t %f\n", t ) ;
-    if( distance2( sphereCenter, closestPt ) > r*r )
+    if( distance2( sphere.c, closestPt ) > sphere.r2 )
       return TriSphereNOINTERSECTION ;
     
     // hit.
@@ -1412,20 +1518,16 @@ struct PrecomputedTriangle
     normalAtPt = getInterpolatedNormal( bary ) ;
 
     return TriSphereChompEdge ;
-  
     //else      printf( "Pt too far from edge (%f)\n", t*edge.len, r ) ;
-    
   }
   
-  inline bool intersectsSphere( const Vector3f& sphereCenter, float r ) const {
+  inline bool intersectsSphere( const Sphere& sphere ) const {
     Vector3f bary, closestPt, normalAtPt ;
-    return intersectsSphere( sphereCenter, r, bary, closestPt, normalAtPt ) ;
+    return intersectsSphere( sphere, bary, closestPt, normalAtPt ) ;
   }
-  
-
 } ;
 
-
+PrecomputedTriangle operator*( const Matrix4f& matrix, const PrecomputedTriangle& tri ) ;
 
 
 
