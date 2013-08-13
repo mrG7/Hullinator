@@ -209,9 +209,21 @@ void hullTriTest()
   Matrix3f rot = Matrix3f::rotationY( ang ) ; // * Matrix3f::rotationX( M_PI- ang ) ;
   tri1 = Triangle( rot*Vector3f( -20,0,5 ), rot*Vector3f( 20,0,5 ), rot*Vector3f( 0,20,-5 ) ) ;
   
-  if( hull1.intersectsTri( tri1 ) ) {
+  // Testing the circumsphere
+  //Sphere circ = tri1.findCircumsphere() ;
+  //addDebugSphereSolid( circ.c, circ.r, Green ) ;
+  
+  Vector3f penetration ;
+  if( hull1.intersectsTri( tri1, penetration ) ) {
+    addDebugLine( tri1.centroid, tri1.centroid + penetration, Red ) ;
     addDebugTriSolid( tri1, Red ) ;
     hull1.drawDebug( Vector4f(1,0,1,0.75) ) ;
+    
+    // Resolve the interpenetration with these ghosts
+    Triangle t2( tri1.a + penetration, tri1.b + penetration, tri1.c + penetration ) ;
+    addDebugTriSolid( t2, Vector4f( 0,0,1,0.5f ) ) ;
+    
+    hull1.drawDebug( -penetration, Vector4f(0,0,1,0.5) ) ;
   }
   else {
     addDebugTriSolid( tri1, Blue ) ;

@@ -651,13 +651,49 @@ public:
     }
     
     return 1 ;
-
-    /*
-    // Try 3 ray hull, but this does not detect a hull through the middle face of the tri.
-    return intersectsRay( Ray( tri.a, tri.b ) ) || 
-           intersectsRay( Ray( tri.b, tri.c ) ) || 
-           intersectsRay( Ray( tri.c, tri.a ) ) ;
-    //*/
+  }
+  
+  bool intersectsTri( const Triangle& tri, Vector3f& penetration ) const {
+    float minOverlap = HUGE ;
+    const Vector3f* axisOfMinOverlap ;
+    
+    float meMin, meMax, oMin, oMax, lowerLim, upperLim ;
+    SATtest( tri.plane.normal, finalPts, meMin, meMax ) ;
+    SATtest( tri.plane.normal, tri.a, oMin, oMax ) ; //Only need to test 1 pt from tri, since all 3 will collapse to same pt.
+    
+    if( !overlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) ) {
+      addDebugLine( tri.plane.normal*meMin, tri.plane.normal*meMax, Red ) ;
+      addDebugPoint( tri.plane.normal*oMin, Blue ) ;
+      return 0 ;
+    }
+    
+    // These by default are the maxes then
+    minOverlap = upperLim-lowerLim ;
+    axisOfMinOverlap = &tri.plane.normal ;
+    
+    // Now test the hull's normals against tri's pts
+    //vector<Vector3f> triPts ;
+    //triPts.push_back( tri.a ) ;  triPts.push_back( tri.b ) ;  triPts.push_back( tri.c ) ;
+    for( int i = 0 ; i < finalNormals.size() ; i++ )
+    {
+      SATtest( finalNormals[i], finalPts, meMin, meMax ) ;
+      SATtest( finalNormals[i], &tri.a, 3, oMin, oMax ) ; // use all 3 tri verts.
+      
+      if( !overlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) ) {
+        addDebugLine( finalNormals[i]*meMin, finalNormals[i]*meMax, Red ) ;
+        addDebugLine( finalNormals[i]*oMin, finalNormals[i]*oMax, Blue ) ;
+        return 0 ;
+      }
+      
+      float overlap=upperLim-lowerLim ;
+      if( overlap < minOverlap ) {
+        axisOfMinOverlap = &finalNormals[i] ;
+        minOverlap = overlap ;
+      }
+    }
+    
+    penetration = (*axisOfMinOverlap)*minOverlap ;
+    return 1 ;
   }
 
   bool intersectsHull( const Hull& o ) const {
@@ -832,13 +868,13 @@ public:
   }
 
   void drawDebug( const Vector4f& color ) const {
-    //for( int i = 0 ; i < indices.size() ; i+=3 )
-    //  addDebugTriSolid( verts[indices[i]], verts[indices[i+1]], verts[indices[i+2]], color ) ;
     for( int i = 0 ; i < finalTris.size() ; i++ )
-    {
       addDebugTriSolid( finalTris[i].a,finalTris[i].b,finalTris[i].c, color ) ;
-    }
-    
+  }
+  
+  void drawDebug( const Vector3f& o, const Vector4f& color ) const {
+    for( int i = 0 ; i < finalTris.size() ; i++ )
+      addDebugTriSolid( o+finalTris[i].a, o+finalTris[i].b, o+finalTris[i].c, color ) ;
   }
   
   void drawDebugExtremePts() const {

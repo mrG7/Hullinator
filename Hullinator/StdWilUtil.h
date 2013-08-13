@@ -201,42 +201,20 @@ inline bool isBetween( float val, float boundA, float boundB )
 
 inline bool overlaps( float min1, float max1, float min2, float max2 )
 {
-  // min1    max1
-  // v       v
-  // 111111111
-  //      22222222
-  //      ^      ^
-  //      min2   max2
-  //
-  // (min2 between min1 and max1)
-  // or
-  //         min1  max1
-  //         v     v
-  //         1111111
-  //   222222222
-  //   ^       ^
-  //   min2    max2
-  // (min1 between min2 and max2)
-  //
-  // other 2 cases:
-  //    1111
-  // 22222222222222
-  // (min1 between min2 and max2)
-  //
-  // 1111111111
-  //       22
-  // (min2 between min1 and max1)
-  
   // misses:
+  // miss 1: max1 < min2
   // 11111
   //        22222
-  // or
+  // miss 2: max2 < min1
   // 2222
   //       1111
-  //return isBetweenOrdered( min2, min1, max1 ) || isBetweenOrdered( min1, min2, max2 ) ;
-  return max1 >= min2 && max2 >= min1 ; // this is the opposite of the `misses` cases
-  
-  
+  //return  isBetweenOrdered( min1, min2, max2 ) || // case 1 or 3
+  //        isBetweenOrdered( min2, min1, max1 ) ;  // case 2 or 4
+  //
+  // this is the opposite of the `misses` cases.  condn for !miss: !( max1 < min2 || max2 < min1 ) ;
+  // It doesn't make that much sense if you look at it without considering that it is just
+  // the logical inversion of the miss cases.  !miss=overlap.
+  return max1 >= min2 && max2 >= min1  ;
 }
 
 // Gets you the actual overlaps and the range (not just boolean t / f)
@@ -244,12 +222,57 @@ inline bool overlaps( float min1, float max1, float min2, float max2, float &low
   // if a number is between the other range pair, THEN IT IS A LIMIT.
   // there are 4 possibilities for the limits, so, do it case by case
   if( max1 < min2 || max2 < min1 )  return 0 ; // NO OVERLAPS
-  if( isBetweenOrdered( min1, min2, max2 ) )  lowerLim = min1 ;
-  else if( isBetweenOrdered( min2, min1, max1 ) )  lowerLim = min2 ;
-  if( isBetweenOrdered( min1, min2, max2 ) )  lowerLim = min1 ;
-  else if( isBetweenOrdered( min2, min1, max1 ) )  lowerLim = min2 ;
-  if( isBetweenOrdered( max1, min2, max2 ) )  upperLim = max1 ;
-  else if( isBetweenOrdered( max2, min1, max1 ) )  upperLim = max2 ;
+  // CASE 1:  (min1 between min2 and max2,  AND  max2 between min1 and max1).
+  //         1111111
+  //   222222222
+  // lowerLim=min1,upperLim=max2
+  //
+  // CASE 2:  (min2 between min1 and max1,  AND  max1 between min2 and max2)
+  // 111111111
+  //      22222222
+  // lowerLim=min2,upperLim=max1
+  //
+  // CASE 3:  (min1 between min2 and max2  AND  max1 between min2 and max2)
+  //    1111
+  // 22222222222222
+  // True overlap: lowerLim=min1,upperLim=max1
+  // But often, want offset to CLEAR.
+  // FIND THE SMALLER OVERLAP, if( min1-min2 < max2-max1 ), lowerLim=min2,upperLim=max1.
+  //                         else  lowerLim=min1, upperLim=max2
+  //
+  // CASE 4:  (min2 between min1 and max1  AND  max2 between min1 and max1)
+  // 1111111111
+  //       22
+  // lowerLim=min2,upperLim=max2 //X
+  // to clear:  if( min2-min1 < max1-max2 )  lowerLim=min1, upperLim=max2
+  //          else lowerLim=min2, upperLim=max1
+  if( isBetweenOrdered( min1, min2, max2 ) ) {
+    // 1 || 3
+    if( isBetweenOrdered( max2, min1, max1 ) )
+      lowerLim=min1,upperLim=max1 ; //case 1
+    else { //3
+      if( max1-min2 < max2-min1 )                   //   1111
+        lowerLim=min2,upperLim=max1 ;               // 22222222222222
+                                                    // ++++++
+      else                                          //        1111
+        lowerLim=min1,upperLim=max2 ;               // 22222222222222
+                                                    //        +++++++
+    }
+  }
+  else { //isBetweenOrdered( min2, min1, max1 ) must be true
+    // 2 || 4 (non overlap case early returned)
+    if( isBetweenOrdered( max2, min1, max1 ) )
+      lowerLim=min2,upperLim=max1 ; // case 2
+    else { // 4
+      if( max2-min1 < max1-min2 ) // ls gap < rs gap    // 1111111111
+        lowerLim=min1,upperLim=max2 ;                //   22
+                                                     // ++++
+      else                                           // 1111111111
+        lowerLim=min2,upperLim=max1 ;                //        22
+                                                     //        +++
+    }
+  }
+    
   return 1 ;
 }
 
