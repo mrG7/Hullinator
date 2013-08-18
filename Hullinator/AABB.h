@@ -4,8 +4,10 @@
 #include "Vectorf.h"
 
 struct Triangle ;
+struct PrecomputedTriangle ;
 struct Ray ;
 struct Sphere ;
+
 
 //#define HUGE 1e30f // actually defined as MAXFLOAT
 //can use FLT_MAX instead
@@ -142,6 +144,8 @@ struct AABB
   
   // Intersection methods:
   bool intersectsAABB( const AABB& o ) const ;
+  
+  bool intersectsTri( const PrecomputedTriangle& tri, Vector3f &penetration ) const ;
   
   bool intersectsSphere( const Sphere& s ) const ;
   

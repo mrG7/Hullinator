@@ -700,12 +700,7 @@ public:
     return closestPtOnHull ;
   }
   
-  // Works for Triangle and PrecomputedTriangle by duck typing
-  template <typename TRITYPE>
-  bool intersectsTri( const TRITYPE& tri ) const {
-    // Generally its pretty accurate, but
-    // this SAT test seems to have some accuracy issues, with detecting false +
-    // See https://github.com/superwills/Hullinator/issues/1
+  bool intersectsTri( const PrecomputedTriangle& tri ) const {
     float meMin, meMax, oMin, oMax ;
     
     // Start with tri normal.
@@ -733,15 +728,32 @@ public:
       }
     }
     
+    // Cross every triangle edge axis with every hull edge axis
+    // Fixes https://github.com/superwills/Hullinator/issues/1
+    for( int i = 0 ; i < transformedNormals.size() ; i++ )
+    {
+      for( int j = 0 ; j < 3 ; j++ )
+      {
+        Vector3f axis = transformedNormals[i].cross( tri.edges[j] ) ;
+        if( axis.allzero() ) skip ;
+        axis.normalize() ;
+        
+        SATtest( axis, transformedPts, meMin, meMax ) ;
+        SATtest( axis, &tri.a, 3, oMin, oMax ) ; // use all 3 tri verts.
+        
+        if( !overlaps( meMin, meMax, oMin, oMax ) )
+          return 0 ;
+      }
+    }
+    
     return 1 ;
   }
   
   // TO PUSH THE TRI OUT OF THE HULL, TRANSLATE THE TRI BY +PENETRATION
   // TO PUSH THE HULL BACK, TRANSLATE THE HULL BY -PENETRATION
-  template <typename TRITYPE>
-  bool intersectsTri( const TRITYPE& tri, Vector3f& penetration ) const {
+  bool intersectsTri( const PrecomputedTriangle& tri, Vector3f& penetration ) const {
     float minOverlap = HUGE ;
-    const Vector3f* axisOfMinOverlap ;
+    Vector3f axisOfMinOverlap ;
     
     float meMin, meMax, oMin, oMax, lowerLim, upperLim ;
     SATtest( tri.plane.normal, transformedPts, meMin, meMax ) ;
@@ -758,7 +770,7 @@ public:
     
     // These by default are the maxes then
     minOverlap = upperLim-lowerLim ;
-    axisOfMinOverlap = &tri.plane.normal ;
+    axisOfMinOverlap = tri.plane.normal ;
     
     // Now test the hull's normals against tri's pts
     //vector<Vector3f> triPts ;
@@ -776,13 +788,42 @@ public:
       
       float overlap=upperLim-lowerLim ;
       if( overlap < minOverlap ) {
-        axisOfMinOverlap = &finalNormals[i] ;
+        axisOfMinOverlap = transformedNormals[i] ;
         minOverlap = overlap ;
       }
     }
     
-    penetration = (*axisOfMinOverlap)*minOverlap ;
+    // cross product axes.  You get pretty good coverage
+    // without testing these...  the fewest hits happen over here.
+    // Bug https://github.com/superwills/Hullinator/issues/1 was due to this part
+    // being SKIPPED
+    
+    // Cross every triangle edge axis with every hull edge axis
+    for( int i = 0 ; i < transformedNormals.size() ; i++ )
+    {
+      for( int j = 0 ; j < 3 ; j++ )
+      {
+        Vector3f axis = transformedNormals[i].cross( tri.edges[j] ) ;
+        if( axis.allzero() ) skip ;
+        axis.normalize() ;
+        
+        SATtest( axis, transformedPts, meMin, meMax ) ;
+        SATtest( axis, &tri.a, 3, oMin, oMax ) ; // use all 3 tri verts.
+        
+        if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) )
+          return 0 ;
+        
+        float overlap=upperLim-lowerLim ;
+        if( overlap < minOverlap ) {
+          axisOfMinOverlap = axis ;
+          minOverlap = overlap ;
+        }
+      }
+    }
+    
+    penetration = axisOfMinOverlap*minOverlap ;
     return 1 ;
+    
   }
   
   bool intersectsSphere( const Vector3f& center, float r, Vector3f& closestPtOnHull ) const {

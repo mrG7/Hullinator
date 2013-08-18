@@ -73,12 +73,13 @@ const char* ModeName[] = {
   "Sphere-hull",
   "Sphere-tri",
   "Sphere-AABB",
+  "AABB-Tri",
   "Hull-AABB",
   "Plane-plane-plane"
 } ;
 enum Mode{
   HullHull, HullTri, TriTri, 
-  SphereHull, SphereTri, SphereAABB, HullAABB,
+  SphereHull, SphereTri, SphereAABB, AABBTri, HullAABB,
     
   PlanePlanePlane // LEAVE PlanePlanePlane LAST, its used to determine #modes
 } ;
@@ -152,6 +153,9 @@ void help()
       break ;
     case Mode::SphereAABB:
       msg( "instr1", "left/right arrows to grow/shrink sphere and also move box. (r) jiggles, (m) makes new, (+/-)" ) ;
+      break ;
+    case Mode::AABBTri:
+      msg( "instr1", "left/right arrows to spin tris. (r) jiggles box, (m) makes new box, (+/-)" ) ;
       break ;
     case Mode::HullAABB:
       msg( "instr1", "left/right/up/down arrows to move aabb. (r) jiggles, also (m), (+/-)" ) ;
@@ -363,6 +367,37 @@ void sphereAABBTest()
   }
 }
 
+void aabbTriTest()
+{
+  static float ang = 0.f;
+  if( IS_KEYDOWN( VK_RIGHT ) )
+    ang += 0.001f ;
+  if( IS_KEYDOWN( VK_LEFT ) )
+    ang -= 0.001f ;
+  
+  Matrix3f rot = Matrix3f::rotationY( ang ) ; // * Matrix3f::rotationX( M_PI- ang ) ;
+  tri1 = Triangle( rot*Vector3f( -20,0,5 ), rot*Vector3f( 20,0,5 ), rot*Vector3f( 0,20,-5 ) ) ;
+  
+  Vector3f penetration ;
+  
+  if( hull1.aabb.intersectsTri( tri1, penetration ) ) {
+    addDebugTriSolid( tri1, Red ) ;
+    addDebugBoxSolid( hull1.aabb.min, hull1.aabb.max, Vector4f(1,0,1,0.75) ) ;
+    
+    // Resolve the interpenetration with these ghosts
+    addDebugLine( tri1.centroid, tri1.centroid + penetration, Red ) ;
+    Triangle t2( tri1.a + penetration, tri1.b + penetration, tri1.c + penetration ) ;
+    addDebugTriSolid( t2, Vector4f( 0,0,1,0.5f ) ) ;
+    
+    AABB offsetBox = hull1.aabb - penetration ;
+    addDebugBoxSolid( offsetBox.min, offsetBox.max, Vector4f(0,0,1,0.5) ) ;
+  }
+  else {
+    addDebugTriSolid( tri1, Blue ) ;
+    addDebugBoxSolid( hull1.aabb.min, hull1.aabb.max, Vector4f(0,0,1,0.75) ) ;
+  }
+}
+
 void hullAABBTest()
 {
   float move=0.01f;
@@ -449,6 +484,9 @@ void draw()
     break ;
   case Mode::SphereAABB:
     sphereAABBTest() ;
+    break ;
+  case Mode::AABBTri:
+    aabbTriTest() ;
     break ;
   case Mode::HullAABB:
     hullAABBTest() ;

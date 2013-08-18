@@ -1268,7 +1268,12 @@ struct PrecomputedTriangle
   
   Plane plane ;
   
-  Vector3f ab, ac ; // PRECOMPUTED EDGES
+  union{
+    // could also use array access into &ab[0,1,2], but tri.edges[2] is cuter.
+    struct { Vector3f ab, ac, bc ; } ; // PRECOMPUTED EDGES
+    Vector3f edges[3];
+  } ;
+  
   float d00,d01,d11,denomBary ;
   bool isDegenerate ;
   
@@ -1345,7 +1350,7 @@ struct PrecomputedTriangle
     centroid = (a + b + c) / 3.f ;
     
     // Barycentric precomputations
-    ab = b-a, ac=c-a, 
+    ab=b-a, ac=c-a, bc=c-b;
     d00 = ab.dot(ab);
     d01 = ab.dot(ac); 
     d11 = ac.dot(ac); 

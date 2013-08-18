@@ -72,6 +72,100 @@ bool AABB::intersectsAABB( const AABB& o ) const
   return true;
 }
 
+bool AABB::intersectsTri( const PrecomputedTriangle& tri, Vector3f &penetration ) const
+{
+  // the algorith on pg 168 of rtcd is:
+  // do SAT test on:
+  // 1. tri normal
+  // 2. 3 face normals from aabb
+  // 3. 9 axes given by cross products of COMBINATIONS OF EDGES from both the tri and aabb.
+  //   - The aabb has 3 unique edge directions (principle axes), and the tri has 3 unique edges.
+  
+  float minOverlap = HUGE ;
+  Vector3f axisOfMinOverlap ; // value b/c the crossed axes are temporary
+  
+  
+  // 1. tri normal
+  float meMin, meMax, oMin, oMax, lowerLim, upperLim ;
+  SATtest( tri.plane.normal, corners, meMin, meMax ) ;
+  SATtest( tri.plane.normal, tri.a, oMin, oMax ) ; //Only need to test 1 pt from tri, since all 3 will collapse to same pt.
+  
+  // Because the tri is going to appear as a POINT in the test, 
+  // we have to use `maxOverlaps`.  See the comments in `maxOverlaps`
+  // for how it detects overlaps differently than plain `overlaps`
+  if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) ) {
+    addDebugLine( tri.plane.normal*meMin, tri.plane.normal*meMax, Red ) ;
+    addDebugPoint( tri.plane.normal*oMin, Blue ) ;
+    return 0 ;
+  }
+  
+  // These by default are the maxes then
+  minOverlap = upperLim-lowerLim ;
+  axisOfMinOverlap = tri.plane.normal ;
+  
+  // 2. 3 face normals from aabb.
+  for( int axis = 0 ; axis < 3 ; axis++ )
+  {
+    // because we're projecting points in 3 space TO THE PRINCIPAL AXES,
+    // the span of the projection of all the vertices is just going to be
+    // the min/max in each priniciple axis direction.
+    // Does this look like I ripped this off the convex hull intersection code, cuz i did.
+    meMin=HUGE,meMax=-HUGE ; // init these here
+    for( int j = 0 ; j < corners.size() ; j++ )
+    {
+      if( corners[j].elts[axis] < meMin )  meMin=corners[j].elts[axis];
+      if( corners[j].elts[axis] > meMax )  meMax=corners[j].elts[axis];
+    }
+    
+    // we "cheat" here and just pick out the correct index for the aabb.
+    // its axis aligned!
+    oMin=min.elts[axis] ;
+    oMax=max.elts[axis] ;
+    if( !overlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) )
+      return 0 ;
+    
+    // Overlaps.  See if this was the smallest overlap yet  
+    float overlap=upperLim-lowerLim ;
+    if( overlap < minOverlap ) {
+      axisOfMinOverlap = axis ;
+      minOverlap = overlap ;
+    }
+  }
+  
+  // See how inaccurate it is w/o cross products
+  //penetration = axisOfMinOverlap*minOverlap ;
+  //return 1 ;
+  // 3 cross products.
+  for( int aabbAxis = 0 ; aabbAxis < 3 ; aabbAxis++ )
+  {
+    for( int triEdge=0 ; triEdge < 3 ; triEdge++ )
+    {
+      Vector3f axis = SATAxes[aabbAxis].cross( tri.edges[triEdge] ) ;
+      if( axis.allzero() ) skip ; // this happens often
+      axis.normalize() ;
+      
+      SATtest( axis, corners, meMin, meMax ) ;
+      SATtest( axis, &tri.a, 3, oMin, oMax ) ; // use all 3 tri verts.
+      
+      if( !overlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) ) {
+        //addDebugLine( transformedNormals[i]*meMin, transformedNormals[i]*meMax, Red ) ;
+        //addDebugLine( transformedNormals[i]*oMin, transformedNormals[i]*oMax, Blue ) ;
+        return 0 ;
+      }
+      
+      // Overlaps.  See if this was the smallest overlap yet  
+      float overlap=upperLim-lowerLim ;
+      if( overlap < minOverlap ) {
+        axisOfMinOverlap = axis ;
+        minOverlap = overlap ;
+      }
+    }
+  }
+  
+  penetration = axisOfMinOverlap*minOverlap ;
+  return 1 ;
+}
+
 bool AABB::intersectsSphere( const Sphere& s ) const
 {
   // get the closest pt on the box to the sphere.
