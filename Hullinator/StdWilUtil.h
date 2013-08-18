@@ -222,6 +222,22 @@ inline bool overlaps( float min1, float max1, float min2, float max2, float &low
   // if a number is between the other range pair, THEN IT IS A LIMIT.
   // there are 4 possibilities for the limits, so, do it case by case
   if( max1 < min2 || max2 < min1 )  return 0 ; // NO OVERLAPS
+  if( isBetweenOrdered( min1, min2, max2 ) )  lowerLim = min1 ;
+  else if( isBetweenOrdered( min2, min1, max1 ) )  lowerLim = min2 ;
+  if( isBetweenOrdered( min1, min2, max2 ) )  lowerLim = min1 ;
+  else if( isBetweenOrdered( min2, min1, max1 ) )  lowerLim = min2 ;
+  if( isBetweenOrdered( max1, min2, max2 ) )  upperLim = max1 ;
+  else if( isBetweenOrdered( max2, min1, max1 ) )  upperLim = max2 ;
+  return 1 ;
+}
+
+// Gets you the actual overlaps and the range (not just boolean t / f)
+// when the ranges are contained within each other, (cases 3 & 4) it forces
+// an overlap in the style shown in the comments below.
+inline bool maxOverlaps( float min1, float max1, float min2, float max2, float &lowerLim, float &upperLim ) {
+  // if a number is between the other range pair, THEN IT IS A LIMIT.
+  // there are 4 possibilities for the limits, so, do it case by case
+  if( max1 < min2 || max2 < min1 )  return 0 ; // NO OVERLAPS
   // CASE 1:  (min1 between min2 and max2,  AND  max2 between min1 and max1).
   //         1111111
   //   222222222

@@ -92,17 +92,23 @@ struct Hull
   //AABB aabb ; // used to find pts closest to AABB corners.
   vector<int> remIndices ; // candidate pts for the hull when being constructed.
   
+  // Keep a transformed set, for each frame.  if you are a drifter then
+  // the transformedPts set should be just re-transformed.  For pilots,
+  // the transformedPts grouping 
   // The UNIQUE set of hull points
-  vector<Vector3f> finalPts ;
+  vector<Vector3f> finalPts, transformedPts ;
   
   // The group of triangles representing the final convex hull.
   vector<Triangle> finalTris ;
+  
+  // So, the same hull will be hit multiple times.
+  vector<PrecomputedTriangle> transformedTris ;
   
   // The group of distinct normals on the final convex hull.
   // if two normals are __very similar__, (two coplanar tris) then they
   // are considered as 1 normal.  That means one less axis to test in SAT testing,
   // since SAT only uses face normals and not actual Triangle position in space.
-  vector<Vector3f> finalNormals ;
+  vector<Vector3f> finalNormals, transformedNormals ;
   
   // This is the distance that is tolerable for pts to be conisdered inside
   // the hull while they are really outside it.
@@ -112,6 +118,7 @@ struct Hull
   //Vector3f N[3]={ HUGE,HUGE,HUGE }, P[3]={-HUGE,-HUGE,-HUGE} ; // mins, maxes
   
   AABB aabb ;
+  
   // The indices of the minimum and maximum vertices,
   // in each of the xyz axes independently.
   int mins[3], maxes[3] ;
@@ -121,7 +128,7 @@ struct Hull
   
   // Has to be BUNCH of values b/c there could be a # of values on the perimeter
   //map< int, vector<Vector3f> > Ns,Ps ; // i used these for finding the AVERAGE pts.
-
+  
   Hull() {
     defaults() ;
   }  
@@ -466,6 +473,14 @@ private:
       if(!had)
         finalNormals.push_back( tri.plane.normal ) ;
     }
+    
+    
+    
+    // identity-transform save copies of finalNormals etc.
+    transformedPts = finalPts ;
+    for( Triangle& tri : finalTris )
+      transformedTris.push_back( tri ) ;
+    transformedNormals = finalNormals ;
   }
   
   void expandToContainAllPts()
@@ -590,20 +605,87 @@ private:
   ///////////////////////////
   // INTERSECTION ROUTINES //
 public:
+  // The default is to re-transform from the original point set.
+  void transform( const Matrix4f& matrix ) {
+    // The containers are already the right size (in getFinalPts).
+    for( int i = 0 ; i < finalTris.size() ; i++ )
+      transformedTris[i] = matrix * finalTris[i] ;
+      
+    for( int i = 0 ; i < finalNormals.size() ; i++ )
+      transformedNormals[i] = matrix.upper3x3( finalNormals[i] ) ;
+      
+    for( int i = 0 ; i < finalPts.size() ; i++ )
+      transformedPts[i] = matrix * finalPts[i] ;
+  }
+  
+  // This transforms the transformed pts from where the transformed last were,
+  void transformTransformed( const Matrix4f& matrix ) {
+    for( PrecomputedTriangle &tri : transformedTris )
+      tri = matrix * tri ;
+      
+    for( Vector3f& pt : transformedNormals )
+      pt = matrix.upper3x3( pt ) ;
+      
+    for( Vector3f& pt : transformedPts )
+      pt = matrix * pt ;
+  }
+  
+  void transformTransformed( const Matrix3f& rot ) {
+    // The containers are already the right size (in getFinalPts).
+    for( PrecomputedTriangle &tri : transformedTris )
+      tri = rot * tri ;
+    for( Vector3f& pt : transformedNormals )
+      pt = rot*pt ;
+    for( Vector3f& pt : transformedPts )
+      pt = rot*pt ;
+  }
+  
+  void translateTransformed( const Vector3f& trans ) {
+    for( PrecomputedTriangle &tri : transformedTris )
+      tri = tri + trans ;
+    for( Vector3f& pt : transformedPts )
+      pt += trans ;
+  }
+  
+  // Used by drifters, who "untranslate" each vertex so
+  // the hull is back at the origin, rotate the hull, then translate it back out again.
+  void untranslateRotateTranslate( const Vector3f& untrans, const Matrix3f& rot )
+  {
+    for( Vector3f& pt : transformedPts )
+    {
+      pt -= untrans ;    // 1. untranslate
+      pt = rot*pt ;      // 2. Then the rotate
+      pt += untrans ;    // Move them back
+    }
+    
+    // These only rotate
+    for( Vector3f& pt : transformedNormals )
+      pt = rot*pt ;
+    
+    for( PrecomputedTriangle &tri : transformedTris )
+    {
+      Vector3f pa = rot*(tri.a - untrans)  +  untrans ;
+      Vector3f pb = rot*(tri.b - untrans)  +  untrans ;
+      Vector3f pc = rot*(tri.c - untrans)  +  untrans ;
+      
+      tri = PrecomputedTriangle( pa, pb, pc ) ;
+    }
+  }
+  
   // You can ask me if some random pt is inside the hull or not after hull formation completed
   bool inside( const Vector3f& pt ) const {
-    for( int i = 0 ; i < finalTris.size() ; i++ )
-      if( finalTris[i].plane.distanceToPoint( pt ) > tolerance )
+    for( int i = 0 ; i < transformedTris.size() ; i++ )
+      if( transformedTris[i].plane.distanceToPoint( pt ) > tolerance )
         return 0 ;
     return 1 ; // you are inside all the planes
   }
 
   float distanceToClosestPointOnHull( const Vector3f& pt, Vector3f& closestPtOnHull ) const {
     float minDist=HUGE ;
-    for( int i = 0 ; i < finalTris.size() ; i++ )
+    for( int i = 0 ; i < transformedTris.size() ; i++ )
     {
       Vector3f ptOnTri ;
-      float dist = finalTris[i].distanceToPoint( pt, ptOnTri ) ;
+      float dist = transformedTris[i].distanceToPoint( pt, ptOnTri ) ;
       if( dist < minDist ) {
         minDist=dist;
         closestPtOnHull = ptOnTri ;
@@ -618,15 +700,16 @@ public:
     return closestPtOnHull ;
   }
   
-  bool intersectsTri( const Triangle& tri ) const {
-    
+  // Works for Triangle and PrecomputedTriangle by duck typing
+  template <typename TRITYPE>
+  bool intersectsTri( const TRITYPE& tri ) const {
     // Generally its pretty accurate, but
     // this SAT test seems to have some accuracy issues, with detecting false +
     // See https://github.com/superwills/Hullinator/issues/1
     float meMin, meMax, oMin, oMax ;
-
+    
     // Start with tri normal.
-    SATtest( tri.plane.normal, finalPts, meMin, meMax ) ;
+    SATtest( tri.plane.normal, transformedPts, meMin, meMax ) ;
     SATtest( tri.plane.normal, tri.a, oMin, oMax ) ; //Only need to test 1 pt from tri, since all 3 will collapse to same pt.
     
     if( !overlaps( meMin, meMax, oMin, oMax ) ) {
@@ -638,10 +721,10 @@ public:
     // Now test the hull's normals against tri's pts
     //vector<Vector3f> triPts ;
     //triPts.push_back( tri.a ) ;  triPts.push_back( tri.b ) ;  triPts.push_back( tri.c ) ;
-    for( int i = 0 ; i < finalNormals.size() ; i++ )
+    for( int i = 0 ; i < transformedNormals.size() ; i++ )
     {
-      SATtest( finalNormals[i], finalPts, meMin, meMax ) ;
-      SATtest( finalNormals[i], &tri.a, 3, oMin, oMax ) ;
+      SATtest( transformedNormals[i], transformedPts, meMin, meMax ) ;
+      SATtest( transformedNormals[i], &tri.a, 3, oMin, oMax ) ;
       
       if( !overlaps( meMin, meMax, oMin, oMax ) ) {
         addDebugLine( finalNormals[i]*meMin, finalNormals[i]*meMax, Red ) ;
@@ -653,15 +736,21 @@ public:
     return 1 ;
   }
   
-  bool intersectsTri( const Triangle& tri, Vector3f& penetration ) const {
+  // TO PUSH THE TRI OUT OF THE HULL, TRANSLATE THE TRI BY +PENETRATION
+  // TO PUSH THE HULL BACK, TRANSLATE THE HULL BY -PENETRATION
+  template <typename TRITYPE>
+  bool intersectsTri( const TRITYPE& tri, Vector3f& penetration ) const {
     float minOverlap = HUGE ;
     const Vector3f* axisOfMinOverlap ;
     
     float meMin, meMax, oMin, oMax, lowerLim, upperLim ;
-    SATtest( tri.plane.normal, finalPts, meMin, meMax ) ;
+    SATtest( tri.plane.normal, transformedPts, meMin, meMax ) ;
     SATtest( tri.plane.normal, tri.a, oMin, oMax ) ; //Only need to test 1 pt from tri, since all 3 will collapse to same pt.
     
-    if( !overlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) ) {
+    // Because the tri is going to appear as a POINT in the test, 
+    // we have to use `maxOverlaps`.  See the comments in `maxOverlaps`
+    // for how it detects overlaps differently than plain `overlaps`
+    if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) ) {
       addDebugLine( tri.plane.normal*meMin, tri.plane.normal*meMax, Red ) ;
       addDebugPoint( tri.plane.normal*oMin, Blue ) ;
       return 0 ;
@@ -674,14 +763,14 @@ public:
     // Now test the hull's normals against tri's pts
     //vector<Vector3f> triPts ;
     //triPts.push_back( tri.a ) ;  triPts.push_back( tri.b ) ;  triPts.push_back( tri.c ) ;
-    for( int i = 0 ; i < finalNormals.size() ; i++ )
+    for( int i = 0 ; i < transformedNormals.size() ; i++ )
     {
-      SATtest( finalNormals[i], finalPts, meMin, meMax ) ;
-      SATtest( finalNormals[i], &tri.a, 3, oMin, oMax ) ; // use all 3 tri verts.
+      SATtest( transformedNormals[i], transformedPts, meMin, meMax ) ;
+      SATtest( transformedNormals[i], &tri.a, 3, oMin, oMax ) ; // use all 3 tri verts.
       
-      if( !overlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) ) {
-        addDebugLine( finalNormals[i]*meMin, finalNormals[i]*meMax, Red ) ;
-        addDebugLine( finalNormals[i]*oMin, finalNormals[i]*oMax, Blue ) ;
+      if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) ) {
+        //addDebugLine( transformedNormals[i]*meMin, transformedNormals[i]*meMax, Red ) ;
+        //addDebugLine( transformedNormals[i]*oMin, transformedNormals[i]*oMax, Blue ) ;
         return 0 ;
       }
       
@@ -695,25 +784,34 @@ public:
     penetration = (*axisOfMinOverlap)*minOverlap ;
     return 1 ;
   }
-
+  
+  bool intersectsSphere( const Vector3f& center, float r, Vector3f& closestPtOnHull ) const {
+    return distanceToClosestPointOnHull( center, closestPtOnHull ) <= r ;
+  }
+  
+  inline bool intersectsSphere( const Vector3f& center, float r ) const {
+    Vector3f closestPtOnHull ;
+    return intersectsSphere( center, r, closestPtOnHull ) ;
+  }
+  
   bool intersectsHull( const Hull& o ) const {
     // Get the normals for one of the shapes,
     float meMin, meMax, oMin, oMax ;
     
-    for( int i = 0 ; i < finalNormals.size() ; i++ )
+    for( int i = 0 ; i < transformedNormals.size() ; i++ )
     {
-      SATtest( finalNormals[i], finalPts, meMin, meMax ) ;
-      SATtest( finalNormals[i], o.finalPts, oMin, oMax ) ;
+      SATtest( transformedNormals[i], transformedPts, meMin, meMax ) ;
+      SATtest( transformedNormals[i], o.transformedPts, oMin, oMax ) ;
       if( !overlaps( meMin, meMax, oMin, oMax ) )
         return 0 ; // NO OVERLAP IN AT LEAST 1 AXIS, SO NO INTERSECTION
       // otherwise, go on with the next test
     }
 
     // TEST SHAPE2.normals as well
-    for( int i = 0 ; i < o.finalNormals.size() ; i++ )
+    for( int i = 0 ; i < o.transformedNormals.size() ; i++ )
     {
-      SATtest( o.finalNormals[i], finalPts, meMin, meMax ) ;
-      SATtest( o.finalNormals[i], o.finalPts, oMin, oMax ) ;
+      SATtest( o.transformedNormals[i], transformedPts, meMin, meMax ) ;
+      SATtest( o.transformedNormals[i], o.transformedPts, oMin, oMax ) ;
       if( !overlaps( meMin, meMax, oMin, oMax ) )
         return 0 ; // NO OVERLAP IN AT LEAST 1 AXIS, SO NO INTERSECTION
     }
@@ -734,10 +832,10 @@ public:
       // the span of the projection of all the vertices is just going to be
       // the min/max in each priniciple axis direction.
       meMin=HUGE,meMax=-HUGE ; // init these here
-      for( int j = 0 ; j < finalPts.size() ; j++ )
+      for( int j = 0 ; j < transformedPts.size() ; j++ )
       {
-        if( finalPts[j].elts[axis] < meMin )  meMin=finalPts[j].elts[axis];
-        if( finalPts[j].elts[axis] > meMax )  meMax=finalPts[j].elts[axis];
+        if( transformedPts[j].elts[axis] < meMin )  meMin=transformedPts[j].elts[axis];
+        if( transformedPts[j].elts[axis] > meMax )  meMax=transformedPts[j].elts[axis];
       }
       
       // we "cheat" here and just pick out the correct index for the aabb.
@@ -750,10 +848,10 @@ public:
     
     // Ok, if the cheaper (aabb) tests didn't fail,
     // then test the hull's planes
-    for( int i = 0 ; i < finalNormals.size() ; i++ )
+    for( int i = 0 ; i < transformedNormals.size() ; i++ )
     {
-      SATtest( finalNormals[i], finalPts, meMin, meMax ) ;
-      SATtest( finalNormals[i], aabb.corners, oMin, oMax ) ;
+      SATtest( transformedNormals[i], transformedPts, meMin, meMax ) ;
+      SATtest( transformedNormals[i], aabb.corners, oMin, oMax ) ;
       if( !overlaps( meMin, meMax, oMin, oMax ) )
         return 0 ;
     }
@@ -770,9 +868,9 @@ public:
   bool intersectsSphere( const Sphere& sphere ) const {
     // Can use an INSIDE test, similar to sphere frustum.
     // OR check i'm within sphere.r of each plane
-    for( int i = 0 ; i < finalTris.size() ; i++ )
+    for( int i = 0 ; i < transformedTris.size() ; i++ )
     {
-      float dist = finalTris[i].plane.distanceToPoint( sphere.c ) ;
+      float dist = transformedTris[i].plane.distanceToPoint( sphere.c ) ;
       
       // If the sphere is way outside one of the planes, it doesn't hit the hull.
       if( dist > sphere.r )  return 0 ;
@@ -789,12 +887,12 @@ public:
     t1=0.f,t2=ray.len ;
     
     // Test EVERY tri..
-    for( int i = 0 ; i < finalTris.size() ; i++ )
+    for( int i = 0 ; i < transformedTris.size() ; i++ )
     {
       // solve t for reaching the plane.
       // The t for reaching the plane would be (-plane.d - normal•ray.start)/(normal • ray.dir)
-      float den = finalTris[i].plane.normal.dot( ray.dir ) ;
-      float dist = -finalTris[i].plane.d - finalTris[i].plane.normal.dot( ray.start ) ;
+      float den = transformedTris[i].plane.normal.dot( ray.dir ) ;
+      float dist = -transformedTris[i].plane.d - transformedTris[i].plane.normal.dot( ray.start ) ;
       
       // If the ray is //l to the plane, but it runs AWAY from the plane,
       // then you'll never hit the convex polyhedron with this ray.
@@ -867,14 +965,22 @@ public:
       addDebugTriLine( verts[indices[i]], verts[indices[i+1]], verts[indices[i+2]], color ) ;
   }
 
-  void drawDebug( const Vector4f& color ) const {
-    for( int i = 0 ; i < finalTris.size() ; i++ )
-      addDebugTriSolid( finalTris[i].a,finalTris[i].b,finalTris[i].c, color ) ;
+  void drawDebug( const Vector3f& o, const Vector4f& color ) const {
+    //for( int i = 0 ; i < indices.size() ; i+=3 )
+    //  addDebugTriSolid( verts[indices[i]], verts[indices[i+1]], verts[indices[i+2]], color ) ;
+    for( int i = 0 ; i < transformedTris.size() ; i++ )
+    {
+      addDebugTriSolid( o+transformedTris[i].a, o+transformedTris[i].b, o+transformedTris[i].c, color ) ;
+    }
   }
   
-  void drawDebug( const Vector3f& o, const Vector4f& color ) const {
-    for( int i = 0 ; i < finalTris.size() ; i++ )
-      addDebugTriSolid( o+finalTris[i].a, o+finalTris[i].b, o+finalTris[i].c, color ) ;
+  void drawDebug( const Vector4f& color ) const {
+    //for( int i = 0 ; i < indices.size() ; i+=3 )
+    //  addDebugTriSolid( verts[indices[i]], verts[indices[i+1]], verts[indices[i+2]], color ) ;
+    for( int i = 0 ; i < transformedTris.size() ; i++ )
+    {
+      addDebugTriSolid( transformedTris[i], color ) ;
+    }
   }
   
   void drawDebugExtremePts() const {
@@ -902,10 +1008,10 @@ public:
   
   void drawDebugFaceNormals() const
   {
-    for( int i = 0 ; i < finalTris.size() ; i++ )
+    for( int i = 0 ; i < transformedTris.size() ; i++ )
     {
-      Vector3f c = finalTris[i].centroid ;
-      addDebugLine( c, c+finalTris[i].plane.normal, Yellow ) ;
+      Vector3f c = transformedTris[i].centroid ;
+      addDebugLine( c, c+transformedTris[i].plane.normal, Yellow ) ;
     }
   }
   

@@ -1911,7 +1911,8 @@ union Matrix4f
   
   // For when you want to access only the rotation
   // components of this matrix and not translate.
-  Vector3f rotNoTrans( const Vector3f& o ) const
+  // transformNoX(), transformWithoutTranslation, upper3x3
+  Vector3f upper3x3( const Vector3f& o ) const
   {
     return Vector3f(
       // NO TRANSLATION.

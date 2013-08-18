@@ -737,7 +737,7 @@ struct Plane
 
 
 
-
+struct PrecomputedTriangle ;
 
 struct Triangle
 {
@@ -750,7 +750,8 @@ struct Triangle
   // If you go ahead an construct the tirangle (instead of using the static fns)
   // then I'm goig to assume you need the plane.
   Triangle( const Vector3f& ia, const Vector3f& ib, const Vector3f& ic ) :
-    a(ia),b(ib),c(ic), plane( a,b,c ) {
+    a(ia),b(ib),c(ic), plane( a,b,c )
+  {
     computeCentroid() ;
   }
   
@@ -766,8 +767,51 @@ struct Triangle
     computeCentroid() ;
   }
   
+  Triangle( const PrecomputedTriangle& ptri ) ;
+  
   inline void println() const {
     a.print(), b.print( ", " ), c.println( ", " ) ;
+  }
+  
+  Sphere findCircumsphere() {
+    // http://mathworld.wolfram.com/Circumcircle.html (useless)
+    // See http://mathworld.wolfram.com/Circumsphere.html (useless)
+    //
+    // These are shewchuk's expressions from http://www.ics.uci.edu/~eppstein/junkyard/circumcenter.html
+    //     |                                                           |
+    //     | |c-a|^2 [(b-a)x(c-a)]x(b-a) + |b-a|^2 (c-a)x[(b-a)x(c-a)] |
+    //     |                                                           |
+    // r = -------------------------------------------------------------,
+    //                     2 | (b-a)x(c-a) |^2
+    
+    //     ( abXac.cross(ab)*ac.len2() + ab.len2()*ac.cross( abXac )).len() 
+    // r = -------------------------------------------------------------
+    //                     2.f*ab.cross(ac).len2()
+    
+    
+    //
+    //         |c-a|^2 [(b-a)x(c-a)]x(b-a) + |b-a|^2 (c-a)x[(b-a)x(c-a)]
+    // m = a + ---------------------------------------------------------.
+    //                           2 | (b-a)x(c-a) |^2
+    // m is the circumcenter
+    
+    // abXac = ab.cross(ac) ;
+    // m = a + ac.len2() * ( abXac ).cross(ab) + ab.len2() * ac.cross( abXac ) / 2.f*abXac.len2() ;
+    //                           
+    
+    Vector3f ac = c - a ;
+    Vector3f ab = b - a ;
+    Vector3f abXac = ab.cross( ac ) ;
+    
+    // this is the vector from a TO the circumsphere center
+    Sphere circumsphere ;
+    circumsphere.c = (abXac.cross( ab )*ac.len2() + ac.cross( abXac )*ab.len2()) / (2.f*abXac.len2()) ;
+    circumsphere.r2 = circumsphere.c.len2() ;
+    circumsphere.r = sqrtf( circumsphere.r2 ) ;
+    
+    circumsphere.c += a ; // now this is the actual 3space location
+    
+    return circumsphere ;
   }
   inline Vector3f& computeCentroid() {
     centroid = ( a + b + c ) / 3.f ;
@@ -936,47 +980,6 @@ struct Triangle
     return (pt-closestPtOnTri).len() ;
   }
   
-  Sphere findCircumsphere() {
-    // http://mathworld.wolfram.com/Circumcircle.html (useless)
-    // See http://mathworld.wolfram.com/Circumsphere.html (useless)
-    //
-    // These are shewchuk's expressions from http://www.ics.uci.edu/~eppstein/junkyard/circumcenter.html
-    //     |                                                           |
-    //     | |c-a|^2 [(b-a)x(c-a)]x(b-a) + |b-a|^2 (c-a)x[(b-a)x(c-a)] |
-    //     |                                                           |
-    // r = -------------------------------------------------------------,
-    //                     2 | (b-a)x(c-a) |^2
-    
-    //     ( abXac.cross(ab)*ac.len2() + ab.len2()*ac.cross( abXac )).len() 
-    // r = -------------------------------------------------------------
-    //                     2.f*ab.cross(ac).len2()
-    
-    
-    //
-    //         |c-a|^2 [(b-a)x(c-a)]x(b-a) + |b-a|^2 (c-a)x[(b-a)x(c-a)]
-    // m = a + ---------------------------------------------------------.
-    //                           2 | (b-a)x(c-a) |^2
-    // m is the circumcenter
-    
-    // abXac = ab.cross(ac) ;
-    // m = a + ac.len2() * ( abXac ).cross(ab) + ab.len2() * ac.cross( abXac ) / 2.f*abXac.len2() ;
-    //                           
-    
-    Vector3f ac = c - a ;
-    Vector3f ab = b - a ;
-    Vector3f abXac = ab.cross( ac ) ;
-    
-    // this is the vector from a TO the circumsphere center
-    Sphere circumsphere ;
-    circumsphere.c = (abXac.cross( ab )*ac.len2() + ac.cross( abXac )*ab.len2()) / (2.f*abXac.len2()) ;
-    circumsphere.r2 = circumsphere.c.len2() ;
-    circumsphere.r = sqrtf( circumsphere.r2 ) ;
-    
-    circumsphere.c += a ; // now this is the actual 3space location
-    
-    return circumsphere ;
-  }
-  
   // yes/no intersection, barycentric coordinates of 
   // intersection, and point of intersection
   // The reason this is all one method and not broekn up is
@@ -1127,6 +1130,8 @@ struct Triangle
     //addDebugPoint( loi.at( t2[1] ), Vector4f(0.25,1,0) ) ;
     
     float tt1,tt2;
+    
+    // Just use regular overlaps, not maxOverlaps.
     bool ints = overlaps( t1[0], t1[1], t2[0], t2[1], tt1, tt2 ) ;
     loi = Ray( loi.at( tt1 ), loi.at( tt2 ) ) ;
     //addDebugRay( loi, Yellow ) ;
@@ -1175,6 +1180,13 @@ struct Triangle
   
   
   
+  // OPERATORS
+  // still pretty expensive
+  Triangle& operator+=( const Vector3f & trans ) {
+    a+=trans, b+=trans, c+=trans, centroid+=trans ;
+    plane=Plane(a,b,c);
+    return *this ;
+  }
   
   
   
@@ -1230,6 +1242,7 @@ struct Triangle
 } ;
 
 Triangle operator*( const Matrix4f& matrix, const Triangle& tri ) ;
+Triangle operator*( const Matrix3f& matrix, const Triangle& tri ) ;
 
 
 
@@ -1254,7 +1267,8 @@ struct PrecomputedTriangle
   Sphere circumsphere ; // the circumsphere centroid is different from the triangle centroid
   
   Plane plane ;
-  Vector3f v0, v1 ;
+  
+  Vector3f ab, ac ; // PRECOMPUTED EDGES
   float d00,d01,d11,denomBary ;
   bool isDegenerate ;
   
@@ -1265,15 +1279,21 @@ struct PrecomputedTriangle
     a(ia),b(ib),c(ic),plane( ia, ib, ic ) {
     precompute() ;
   }
+  
   PrecomputedTriangle( const Vector3f& ia, const Vector3f& ib, const Vector3f& ic,
     const Vector3f& ina, const Vector3f& inb, const Vector3f& inc ) :
     a(ia),b(ib),c(ic),plane( ia, ib, ic ),
     nA(ina), nB(inb), nC(inc) {
     precompute() ;
   }
+  
   PrecomputedTriangle( const Triangle& iTri ) :
     a(iTri.a),b(iTri.b),c(iTri.c),plane( iTri.plane ) {
     precompute() ;
+  }
+  
+  inline void println() const {
+    a.print(), b.print( ", " ), c.println( ", " ) ;
   }
   
   void findCircumsphere() {
@@ -1323,14 +1343,15 @@ struct PrecomputedTriangle
     
     // centroid precomp
     centroid = (a + b + c) / 3.f ;
-    findCircumsphere() ;
     
     // Barycentric precomputations
-    v0 = b-a, v1=c-a, 
-    d00 = v0.dot(v0);
-    d01 = v0.dot(v1); 
-    d11 = v1.dot(v1); 
+    ab = b-a, ac=c-a, 
+    d00 = ab.dot(ab);
+    d01 = ab.dot(ac); 
+    d11 = ac.dot(ac); 
     denomBary = d00 * d11 - d01 * d01;
+    
+    findCircumsphere() ; // uses ab,ac
   }
   
   Vector3f getInterpolatedNormal( const Vector3f& bary ) const {
@@ -1340,12 +1361,23 @@ struct PrecomputedTriangle
     return a*bary.x + b*bary.y + c*bary.z ;
   }
   
+  inline Vector3f randomPointInsideTri() const {
+    Vector3f bary = Vector3f::randBary() ;
+    return a*bary.x + b*bary.y + c*bary.z ;
+  }
+  inline float area() const {
+    return ( ab.cross( ac ) ).len() / 2.f ;
+  }
+  inline float minEdgeLen() const {
+    return min3( ab.len(), ac.len(), (c - b).len() ) ;
+  }
+  
   bool pointInside( const Vector3f& p, Vector3f& bary ) const
   {
     // reduced runtime cost for static meshes
     Vector3f v2=p-a ; //3
-    float d20 = v2.dot(v0); //5
-    float d21 = v2.dot(v1); //5
+    float d20 = v2.dot(ab); //5
+    float d21 = v2.dot(ac); //5
     bary.y = (d11 * d20 - d01 * d21) / denomBary ; //4
     bary.z = (d00 * d21 - d01 * d20) / denomBary ; //4
     bary.x = 1.f - bary.y - bary.z; //2
@@ -1355,23 +1387,6 @@ struct PrecomputedTriangle
   
   inline bool pointInside( const Vector3f& p ) const {
     Vector3f bary ;    return pointInside( p, bary ) ;
-  }
-  
-  bool intersectsRay( const Ray& ray, Vector3f& p, Vector3f& bary ) const {
-    float t = plane.intersectsRay( ray ) ;
-    if( t < 0 || t > ray.len )  return false ;
-    p = ray.at( t ) ;
-    return pointInside( p, bary ) ;
-  }
-  
-  inline bool intersectsRay( const Ray& ray, Vector3f& p ) const {
-    Vector3f bary ;
-    return intersectsRay( ray, p, bary ) ;
-  }
-  
-  inline bool intersectsRay( const Ray& ray ) const {
-    Vector3f p, bary ;
-    return intersectsRay( ray, p, bary ) ;
   }
   
   // PrecomputedTriangle::signedDistanceToPoint Finds you the closest point on the triangle to your 3space point.
@@ -1425,6 +1440,99 @@ struct PrecomputedTriangle
     
     //addDebugPoint( closestPtOnTri, Cyan ) ;
     return signum(dist)*distance1( pt, closestPtOnTri ) ;
+  }
+  
+  // Finds you the closest point on the triangle to your 3space point.
+  // pg 141 rtcd.  It might be more efficient than the method I have above,
+  // but for points far away from small triangles, because you hit __6__
+  // if statements before finally returning a value (in tri).
+  Vector3f closestPointOnTri( const Vector3f& p ) const
+  {
+    Vector3f ap = p - a ;
+    float d1 = ab.dot(ap), d2 = ac.dot(ap);
+    
+    // This means 
+    if( d1 <= 0.f && d2 <= 0.f ) {
+      //addDebugPoint( a, Yellow ) ; //CORNER
+      return a ;
+    }
+    
+    Vector3f bp = p - b ;
+    float d3 = ab.dot(bp);
+    float d4 = ac.dot(bp);
+    if( d3 >= 0.f && d4 <= d3 ) {
+      //addDebugPoint( b, Yellow ) ; //CORNER
+      return b ;
+    }
+    
+    float vc = d1*d4 - d3*d2 ;
+    if( vc <= 0.f && d1 >= 0.f && d3 <= 0.f ) {
+      float v = d1 / (d1 - d3) ;
+      Vector3f closestPtOnTri = a + ab*v ;
+      //addDebugPoint( closestPtOnTri, Orange ) ;
+      return closestPtOnTri ;
+    }
+    
+    Vector3f cp = p - c ;
+    float d5 = ab.dot( cp ) ;
+    float d6 = ac.dot( cp ) ;
+    if( d6 >= 0.f && d5 <= d6 ) {
+      //addDebugPoint( c, Yellow ) ; //CORNER
+      return c ;
+    }
+    
+    float vb = d5*d2 - d1*d6 ;
+    if( vb <= 0.f && d2 >= 0.f && d6 <= 0.f ) {
+      float w = d2 / (d2 - d6) ;
+      Vector3f closestPtOnTri = a + ac*w ;
+      //addDebugPoint( closestPtOnTri, Orange ) ; // EDGE
+      return closestPtOnTri ;
+    }
+    
+    float va = d3*d6 - d5*d4 ;
+    if( va <= 0.f && (d4 - d3) >= 0.f && (d5-d6) >= 0.f )
+    {
+      float w = (d4 - d3 ) / (d4-d3 + d5-d6) ;
+      Vector3f closestPtOnTri = b + (c-b)*w ;
+      //addDebugPoint( closestPtOnTri, Orange ) ; // EDGE
+      return closestPtOnTri ;
+    }
+    
+    float den = 1.f / (va+vb+vc);
+    float v = vb*den;
+    float w = vc*den;
+    Vector3f closestPtOnTri = a + ab*v + ac*w ;
+    //addDebugPoint( closestPtOnTri, Magenta ) ; //FACE
+    return closestPtOnTri ;
+  }
+  
+  // you only want the DISTANCE to the closest pt on the tri
+  inline float distanceToPoint( const Vector3f& pt ) const {
+    Vector3f ptOnTri = closestPointOnTri( pt ) ;
+    return (pt-ptOnTri).len() ;
+  }
+  
+  // you want both DISTANCE AND closest pt on the tri (UNSIGNED)
+  inline float distanceToPoint( const Vector3f& pt, Vector3f& closestPtOnTri ) const {
+    closestPtOnTri = closestPointOnTri( pt ) ;
+    return (pt-closestPtOnTri).len() ;
+  }
+  
+  bool intersectsRay( const Ray& ray, Vector3f& p, Vector3f& bary ) const {
+    float t = plane.intersectsRay( ray ) ;
+    if( t < 0 || t > ray.len )  return false ;
+    p = ray.at( t ) ;
+    return pointInside( p, bary ) ;
+  }
+  
+  inline bool intersectsRay( const Ray& ray, Vector3f& p ) const {
+    Vector3f bary ;
+    return intersectsRay( ray, p, bary ) ;
+  }
+  
+  inline bool intersectsRay( const Ray& ray ) const {
+    Vector3f p, bary ;
+    return intersectsRay( ray, p, bary ) ;
   }
   
   // THere are 2 different things going on here.  Kisses and bites.
@@ -1525,11 +1633,16 @@ struct PrecomputedTriangle
     Vector3f bary, closestPt, normalAtPt ;
     return intersectsSphere( sphere, bary, closestPt, normalAtPt ) ;
   }
+  
+  
 } ;
 
 PrecomputedTriangle operator*( const Matrix4f& matrix, const PrecomputedTriangle& tri ) ;
+PrecomputedTriangle operator*( const Matrix3f& matrix, const PrecomputedTriangle& tri ) ;
 
+PrecomputedTriangle operator+( const Vector3f& disp, const PrecomputedTriangle& tri ) ;
 
+PrecomputedTriangle operator+( const PrecomputedTriangle& tri, const Vector3f& disp ) ;
 
 
 

@@ -30,3 +30,31 @@ void SATtest( const Vector3f& axis, const Vector3f* ptSet, int n, float& minAlon
   }
 }
 
+// GLobal function defining Matrix4f*Triangle.
+Triangle operator*( const Matrix4f& matrix, const Triangle& tri ) {
+  return Triangle( matrix*tri.a, matrix*tri.b, matrix*tri.c ) ;
+}
+Triangle operator*( const Matrix3f& matrix, const Triangle& tri ) {
+  return Triangle( matrix*tri.a, matrix*tri.b, matrix*tri.c ) ;
+}
+
+PrecomputedTriangle operator*( const Matrix4f& matrix, const PrecomputedTriangle& tri ) {
+  return PrecomputedTriangle( matrix*tri.a, matrix*tri.b, matrix*tri.c ) ;
+}
+
+PrecomputedTriangle operator*( const Matrix3f& matrix, const PrecomputedTriangle& tri ) {
+  return PrecomputedTriangle( matrix*tri.a, matrix*tri.b, matrix*tri.c ) ;
+}
+
+PrecomputedTriangle operator+( const PrecomputedTriangle& tri, const Vector3f& disp ){ 
+  return PrecomputedTriangle( tri.a+disp, tri.b+disp, tri.c+disp ) ;
+}
+PrecomputedTriangle operator+( const Vector3f& disp, const PrecomputedTriangle& tri ){ 
+  return PrecomputedTriangle( tri.a+disp, tri.b+disp, tri.c+disp ) ;
+}
+
+Triangle::Triangle( const PrecomputedTriangle& ptri ) :
+a(ptri.a),b(ptri.b),c(ptri.c), plane( a,b,c )
+{
+  computeCentroid() ;
+}
