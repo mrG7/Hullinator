@@ -1,7 +1,7 @@
 #ifndef HULLO_H
 #define HULLO_H
 /*
-
+  
   https://github.com/superwills/Hullinator
   Hull.h - Convex hull creation from point cloud
   Accompanies my answer at http://gamedev.stackexchange.com/questions/25397/obb-vs-obb-collision-detection/60225#60225
@@ -708,8 +708,8 @@ public:
     SATtest( tri.plane.normal, tri.a, oMin, oMax ) ; //Only need to test 1 pt from tri, since all 3 will collapse to same pt.
     
     if( !overlaps( meMin, meMax, oMin, oMax ) ) {
-      addDebugLine( tri.plane.normal*meMin, tri.plane.normal*meMax, Red ) ;
-      addDebugPoint( tri.plane.normal*oMin, Blue ) ;
+      //addDebugLine( tri.plane.normal*meMin, tri.plane.normal*meMax, Red ) ;
+      //addDebugPoint( tri.plane.normal*oMin, Blue ) ;
       return 0 ;
     }
   
@@ -722,8 +722,8 @@ public:
       SATtest( transformedNormals[i], &tri.a, 3, oMin, oMax ) ;
       
       if( !overlaps( meMin, meMax, oMin, oMax ) ) {
-        addDebugLine( finalNormals[i]*meMin, finalNormals[i]*meMax, Red ) ;
-        addDebugLine( finalNormals[i]*oMin, finalNormals[i]*oMax, Blue ) ;
+        //addDebugLine( finalNormals[i]*meMin, finalNormals[i]*meMax, Red ) ;
+        //addDebugLine( finalNormals[i]*oMin, finalNormals[i]*oMax, Blue ) ;
         return 0 ;
       }
     }
@@ -763,8 +763,8 @@ public:
     // we have to use `maxOverlaps`.  See the comments in `maxOverlaps`
     // for how it detects overlaps differently than plain `overlaps`
     if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) ) {
-      addDebugLine( tri.plane.normal*meMin, tri.plane.normal*meMax, Red ) ;
-      addDebugPoint( tri.plane.normal*oMin, Blue ) ;
+      //addDebugLine( tri.plane.normal*meMin, tri.plane.normal*meMax, Red ) ;
+      //addDebugPoint( tri.plane.normal*oMin, Blue ) ;
       return 0 ;
     }
     
@@ -825,6 +825,109 @@ public:
     return 1 ;
     
   }
+  
+  // The contact point is also generated.
+  bool intersectsTri( const PrecomputedTriangle& tri, Vector3f& penetration, Vector3f &contact ) const {
+    float minOverlap = HUGE ;
+    Vector3f axisOfMinOverlap ;
+    const PrecomputedTriangle *pTriMinOverlap ;
+    
+    float meMin, meMax, oMin, oMax, lowerLim, upperLim ;
+    SATtest( tri.plane.normal, transformedPts, meMin, meMax ) ;
+    SATtest( tri.plane.normal, tri.a, oMin, oMax ) ; //Only need to test 1 pt from tri, since all 3 will collapse to same pt.
+    
+    if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) )
+      return 0 ;
+    
+    // These by default are the maxes then
+    minOverlap = upperLim-lowerLim ;
+    axisOfMinOverlap = tri.plane.normal ;
+    pTriMinOverlap = &tri ;
+    
+    for( int i = 0 ; i < transformedTris.size() ; i++ )
+    {
+      SATtest( transformedTris[i].plane.normal, transformedPts, meMin, meMax ) ;
+      SATtest( transformedTris[i].plane.normal, &tri.a, 3, oMin, oMax ) ; // use all 3 tri verts.
+      
+      if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) ) {
+        //addDebugLine( transformedNormals[i]*meMin, transformedNormals[i]*meMax, Red ) ;
+        //addDebugLine( transformedNormals[i]*oMin, transformedNormals[i]*oMax, Blue ) ;
+        return 0 ;
+      }
+      
+      float overlap=upperLim-lowerLim ;
+      if( overlap < minOverlap ) {
+        axisOfMinOverlap = transformedTris[i].plane.normal ;
+        minOverlap = overlap ;
+        pTriMinOverlap = &transformedTris[i];
+      }
+    }
+    
+    // Cross every triangle edge axis with every hull edge axis
+    for( int i = 0 ; i < transformedTris.size() ; i++ )
+    {
+      for( int j = 0 ; j < 3 ; j++ )
+      {
+        Vector3f axis = transformedTris[i].plane.normal.cross( tri.edges[j] ) ;
+        if( axis.allzero() ) skip ;
+        axis.normalize() ;
+        
+        SATtest( axis, transformedPts, meMin, meMax ) ;
+        SATtest( axis, &tri.a, 3, oMin, oMax ) ; // use all 3 tri verts.
+        
+        if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) )
+          return 0 ;
+        
+        float overlap=upperLim-lowerLim ;
+        if( overlap < minOverlap ) {
+          axisOfMinOverlap = axis ;
+          minOverlap = overlap ;
+          
+          // This is a cross product between edges.
+          //pTriMinOverlap=&transformedTris[i];
+          pTriMinOverlap=0;
+        }
+      }
+    }
+    
+    penetration = axisOfMinOverlap*minOverlap ;
+    
+    // Umm... You take your axis of minimal overlap, project the first polygon on it,
+    // find the point(s) with the biggest dot product results, then do the same with
+    // the second but find the points with the smallest dot product results.
+    // Those are the points you're looking for, more or less.
+    //  https://www.allegro.cc/forums/thread/596835
+    // That produces a pointon the hull that is CLOSE to the tri.
+    // For now I'm calling it the contact point, but this could be a lot more exact.
+    
+    // This Code Zealot post: http://www.codezealot.org/archives/394
+    
+    ///*
+    // On the convex hull we only want the pt of min pene
+    // The pt generated is VERY reasonable.
+    int meSmall=0,meLarge=0;
+    SATGetPtsWithExtremeDots( axisOfMinOverlap, transformedPts, meSmall, meLarge ) ;
+    ////addDebugPoint( transformedPts[meSmall], DarkGreen ) ;
+    ////addDebugPoint( transformedPts[meLarge], Green ) ;
+    contact = transformedPts[meSmall] ;
+    //*/
+    
+    
+    // On the tri, max.
+    //int oSmall=0,oLarge=0;
+    //SATGetPtsWithExtremeDots( axisOfMinOverlap, &tri.a, 3, oSmall, oLarge ) ;
+    //addDebugPoint( (&tri.a)[oSmall], Vector4f(0.5,0.5,0,1) ) ;
+    //addDebugPoint( (&tri.a)[oLarge], Yellow ) ;
+    
+    if( pTriMinOverlap )
+    {
+      Vector3f off = pTriMinOverlap->plane.normal*0.01f;
+      addDebugTriSolid( pTriMinOverlap->a+off, pTriMinOverlap->b+off, pTriMinOverlap->c+off, Green ) ;
+    }
+    
+    return 1 ;
+  }
+  
   
   bool intersectsSphere( const Vector3f& center, float r, Vector3f& closestPtOnHull ) const {
     return distanceToClosestPointOnHull( center, closestPtOnHull ) <= r ;

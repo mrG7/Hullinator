@@ -11,6 +11,10 @@ void SATtest( const Vector3f& axis, const vector<Vector3f>& ptSet, float& minAlo
 // Single pt and C style array versions
 void SATtest( const Vector3f& axis, const Vector3f& pt, float& minAlong, float& maxAlong ) ;
 void SATtest( const Vector3f& axis, const Vector3f* ptSet, int n, float& minAlong, float& maxAlong ) ;
+void SATGetPtsWithExtremeDots( const Vector3f& axis, const vector<Vector3f>& ptSet, int& ptWithSmallestDot, int& ptWithBiggestDot ) ;
+
+void SATGetPtsWithExtremeDots( const Vector3f& axis, const Vector3f *ptSet, int n, int& ptWithSmallestDot, int& ptWithBiggestDot ) ;
+
 
 // a collideable sphere
 struct Sphere

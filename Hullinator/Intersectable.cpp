@@ -20,6 +20,7 @@ void SATtest( const Vector3f& axis, const Vector3f& pt, float& minAlong, float& 
   if( dotVal < minAlong )  minAlong=dotVal;
   if( dotVal > maxAlong )  maxAlong=dotVal;
 }
+
 void SATtest( const Vector3f& axis, const Vector3f* ptSet, int n, float& minAlong, float& maxAlong ) {
   minAlong=HUGE, maxAlong=-HUGE;
   for( int i = 0 ; i < n ; i++ )
@@ -27,6 +28,43 @@ void SATtest( const Vector3f& axis, const Vector3f* ptSet, int n, float& minAlon
     float dotVal = ptSet[i].dot( axis ) ;
     if( dotVal < minAlong )  minAlong=dotVal;
     if( dotVal > maxAlong )  maxAlong=dotVal;
+  }
+}
+
+void SATGetPtsWithExtremeDots( const Vector3f& axis, const vector<Vector3f>& ptSet, int& ptWithSmallestDot, int& ptWithBiggestDot )
+{
+  float minDot=HUGE, maxDot=-HUGE;
+  for( int i = 0 ; i < ptSet.size() ; i++ )
+  {
+    // just dot it to get the min/max along this axis.
+    float dotVal = ptSet[i].dot( axis ) ;
+    if( dotVal < minDot ) {
+      minDot = dotVal ;
+      ptWithBiggestDot = i ;
+    }
+    if( dotVal > maxDot ) {
+      maxDot = dotVal ;
+      ptWithSmallestDot = i ;
+    }
+  }
+}
+
+
+void SATGetPtsWithExtremeDots( const Vector3f& axis, const Vector3f *ptSet, int n, int& ptWithSmallestDot, int& ptWithBiggestDot )
+{
+  float minDot=HUGE, maxDot=-HUGE;
+  for( int i = 0 ; i < n ; i++ )
+  {
+    // just dot it to get the min/max along this axis.
+    float dotVal = ptSet[i].dot( axis ) ;
+    if( dotVal < minDot ) {
+      minDot = dotVal ;
+      ptWithBiggestDot = i ;
+    }
+    if( dotVal > maxDot ) {
+      maxDot = dotVal ;
+      ptWithSmallestDot = i ;
+    }
   }
 }
 

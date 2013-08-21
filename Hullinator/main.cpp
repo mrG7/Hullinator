@@ -212,25 +212,30 @@ void hullTriTest()
   
   Matrix3f rot = Matrix3f::rotationY( ang ) ; // * Matrix3f::rotationX( M_PI- ang ) ;
   tri1 = Triangle( rot*Vector3f( -20,0,5 ), rot*Vector3f( 20,0,5 ), rot*Vector3f( 0,20,-5 ) ) ;
-  
   // Testing the circumsphere
   //Sphere circ = tri1.findCircumsphere() ;
   //addDebugSphereSolid( circ.c, circ.r, Green ) ;
   
-  Vector3f penetration ;
-  if( hull1.intersectsTri( tri1, penetration ) ) {
+  Vector3f penetration, contact ;
+  if( hull1.intersectsTri( tri1, penetration, contact ) ) {
+
     addDebugLine( tri1.centroid, tri1.centroid + penetration, Red ) ;
-    addDebugTriSolid( tri1, Red ) ;
+    
+    addDebugTriSolidWithNormal( tri1, Red ) ;
+    
+    addDebugPoint( contact, Green ) ;
     hull1.drawDebug( Vector4f(1,0,1,0.75) ) ;
     
     // Resolve the interpenetration with these ghosts
+    // The triangle needs to move back +penetration to clear the hull
     Triangle t2( tri1.a + penetration, tri1.b + penetration, tri1.c + penetration ) ;
     addDebugTriSolid( t2, Vector4f( 0,0,1,0.5f ) ) ;
     
+    // The hull needs to move back -penetration to clear the tri.
     hull1.drawDebug( -penetration, Vector4f(0,0,1,0.5) ) ;
   }
   else {
-    addDebugTriSolid( tri1, Blue ) ;
+    addDebugTriSolidWithNormal( tri1, Blue ) ;
     hull1.drawDebug( Vector4f(0,0,1,0.75) ) ;
   }
 }
