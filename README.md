@@ -1,7 +1,9 @@
 Hullinator
 ==========
 
-Convex hull generation and intersection (SAT test)
+Convex hull generation using the QuickHull algorithm.
+
+Geometric intersection of various primitives (primarily using the SAT test)
 
 ### Generates convex hulls from point clouds
 
