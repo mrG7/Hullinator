@@ -832,6 +832,7 @@ public:
     Vector3f axisOfMinOverlap ;
     const PrecomputedTriangle *pTriMinOverlap ;
     
+    // 1. Test the tri.
     float meMin, meMax, oMin, oMax, lowerLim, upperLim ;
     SATtest( tri.plane.normal, transformedPts, meMin, meMax ) ;
     SATtest( tri.plane.normal, tri.a, oMin, oMax ) ; //Only need to test 1 pt from tri, since all 3 will collapse to same pt.
@@ -844,6 +845,7 @@ public:
     axisOfMinOverlap = tri.plane.normal ;
     pTriMinOverlap = &tri ;
     
+    // 2. Test the hull's tris
     for( int i = 0 ; i < transformedTris.size() ; i++ )
     {
       SATtest( transformedTris[i].plane.normal, transformedPts, meMin, meMax ) ;
@@ -863,7 +865,7 @@ public:
       }
     }
     
-    // Cross every triangle edge axis with every hull edge axis
+    // 3. Test the CROSS of every triangle edge axis with every hull edge axis
     for( int i = 0 ; i < transformedTris.size() ; i++ )
     {
       for( int j = 0 ; j < 3 ; j++ )
@@ -888,7 +890,32 @@ public:
           pTriMinOverlap=0;
         }
       }
+      
+      // hull edges against tri normal.
+      for( int j = 0 ; j < 3 ; j++ )
+      {
+        Vector3f axis = transformedTris[i].edges[j].cross( tri.plane.normal ) ;
+        if( axis.allzero() ) skip ;
+        axis.normalize() ;
+        
+        SATtest( axis, transformedPts, meMin, meMax ) ;
+        SATtest( axis, &tri.a, 3, oMin, oMax ) ; // use all 3 tri verts.
+        
+        if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) )
+          return 0 ;
+        
+        float overlap=upperLim-lowerLim ;
+        if( overlap < minOverlap ) {
+          axisOfMinOverlap = axis ;
+          minOverlap = overlap ;
+          
+          // This is a cross product between edges.
+          //pTriMinOverlap=&transformedTris[i];
+          pTriMinOverlap=0;
+        }
+      }
     }
+    
     
     penetration = axisOfMinOverlap*minOverlap ;
     
@@ -959,6 +986,162 @@ public:
       if( !overlaps( meMin, meMax, oMin, oMax ) )
         return 0 ; // NO OVERLAP IN AT LEAST 1 AXIS, SO NO INTERSECTION
     }
+    
+    // 3. For accurate results, need test CROSSES
+    // 3. Test the CROSS of every triangle edge axis with every hull edge axis
+    for( int i = 0 ; i < transformedTris.size() ; i++ )
+    {
+      for( int j = 0 ; j < o.transformedTris.size() ; j++ )
+      {
+        for( int edgeNo = 0 ; edgeNo < 3 ; edgeNo++ )
+        {
+          Vector3f axis = transformedTris[i].plane.normal.cross( o.transformedTris[j].edges[ edgeNo ] ) ;
+          if( axis.allzero() ) skip ;
+          axis.normalize() ;
+          
+          SATtest( axis, transformedPts, meMin, meMax ) ;
+          SATtest( axis, o.transformedPts, oMin, oMax ) ;
+          
+          if( !overlaps( meMin, meMax, oMin, oMax ) )
+            return 0 ;
+        }
+        
+        
+        
+        for( int edgeNo = 0 ; edgeNo < 3 ; edgeNo++ )
+        {
+          Vector3f axis = transformedTris[i].edges[ edgeNo ].cross( o.transformedTris[j].plane.normal ) ;
+          if( axis.allzero() ) skip ;
+          axis.normalize() ;
+          
+          SATtest( axis, transformedPts, meMin, meMax ) ;
+          SATtest( axis, o.transformedPts, oMin, oMax ) ;
+          
+          if( !overlaps( meMin, meMax, oMin, oMax ) )
+            return 0 ;
+        }
+      }
+    }
+    
+    // if overlap occurred in ALL AXES, then they do intersect
+    return 1 ;
+  }
+  
+  
+  // With separation vector.
+  bool intersectsHull( const Hull& o, Vector3f &penetration, Vector3f &contact1, Vector3f &contact2 ) const {
+    
+    // Vars for penetration distance.
+    Vector3f axisOfMinOverlap ;
+    float minOverlap = HUGE ;
+    const PrecomputedTriangle *pTriMinOverlap ;
+
+    float meMin, meMax, oMin, oMax, lowerLim, upperLim ;
+    
+    for( int i = 0 ; i < transformedNormals.size() ; i++ )
+    {
+      SATtest( transformedNormals[i], transformedPts, meMin, meMax ) ;
+      SATtest( transformedNormals[i], o.transformedPts, oMin, oMax ) ;
+      
+      if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) ) {
+        //addDebugLine( transformedNormals[i]*meMin, transformedNormals[i]*meMax, Red ) ;
+        //addDebugLine( transformedNormals[i]*oMin, transformedNormals[i]*oMax, Blue ) ;
+        return 0 ; // NO OVERLAP IN AT LEAST 1 AXIS, SO NO INTERSECTION
+      }
+      
+      float overlap=upperLim-lowerLim ;
+      if( overlap < minOverlap ) {
+        axisOfMinOverlap = transformedTris[i].plane.normal ;
+        minOverlap = overlap ;
+        pTriMinOverlap = &transformedTris[i];
+      }
+    }
+
+    // TEST SHAPE2.normals as well
+    for( int i = 0 ; i < o.transformedNormals.size() ; i++ )
+    {
+      SATtest( o.transformedNormals[i], transformedPts, meMin, meMax ) ;
+      SATtest( o.transformedNormals[i], o.transformedPts, oMin, oMax ) ;
+      if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) ) {
+        //addDebugLine( transformedNormals[i]*meMin, transformedNormals[i]*meMax, Red ) ;
+        //addDebugLine( transformedNormals[i]*oMin, transformedNormals[i]*oMax, Blue ) ;
+        return 0 ; // NO OVERLAP IN AT LEAST 1 AXIS, SO NO INTERSECTION
+      }
+      
+      float overlap=upperLim-lowerLim ;
+      if( overlap < minOverlap ) {
+        axisOfMinOverlap = transformedTris[i].plane.normal ;
+        minOverlap = overlap ;
+        pTriMinOverlap = &transformedTris[i];
+      }
+    }
+    
+    
+    // 3. For accurate results, need test CROSSES
+    // 3. Test the CROSS of every triangle edge axis with every hull edge axis
+    for( int i = 0 ; i < transformedTris.size() ; i++ )
+    {
+      for( int j = 0 ; j < o.transformedTris.size() ; j++ )
+      {
+        // tt's normals against o.tt's edges
+        for( int edgeNo = 0 ; edgeNo < 3 ; edgeNo++ )
+        {
+          Vector3f axis = transformedTris[i].plane.normal.cross( o.transformedTris[j].edges[ edgeNo ] ) ;
+          if( axis.allzero() ) skip ;
+          axis.normalize() ;
+          
+          SATtest( axis, transformedPts, meMin, meMax ) ;
+          SATtest( axis, o.transformedPts, oMin, oMax ) ;
+          
+          if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) )
+            return 0 ;
+          
+          float overlap=upperLim-lowerLim ;
+          if( overlap < minOverlap ) {
+            axisOfMinOverlap = axis ;
+            minOverlap = overlap ;
+            // This is a cross product between edges.
+            //pTriMinOverlap=&transformedTris[i];
+            pTriMinOverlap=0;
+          }
+        }
+        
+        // and tt's edges against o.tt's normals
+        for( int edgeNo = 0 ; edgeNo < 3 ; edgeNo++ )
+        {
+          Vector3f axis = transformedTris[i].edges[ edgeNo ].cross( o.transformedTris[j].plane.normal ) ;
+          if( axis.allzero() ) skip ;
+          axis.normalize() ;
+          
+          SATtest( axis, transformedPts, meMin, meMax ) ;
+          SATtest( axis, o.transformedPts, oMin, oMax ) ;
+          
+          if( !maxOverlaps( meMin, meMax, oMin, oMax, lowerLim, upperLim ) )
+            return 0 ;
+          
+          float overlap=upperLim-lowerLim ;
+          if( overlap < minOverlap ) {
+            axisOfMinOverlap = axis ;
+            minOverlap = overlap ;
+            pTriMinOverlap=0;
+          }
+        }
+      }
+    }
+    
+    
+    penetration = axisOfMinOverlap*minOverlap ;
+    
+    // On the convex hull we only want the pt of min pene
+    // The pt generated is VERY reasonable.
+    int meSmall=0,meLarge=0;
+    SATGetPtsWithExtremeDots( axisOfMinOverlap, transformedPts, meSmall, meLarge ) ;
+    ////addDebugPoint( transformedPts[meSmall], DarkGreen ) ;
+    ////addDebugPoint( transformedPts[meLarge], Green ) ;
+    contact1 = transformedPts[meSmall] ;
+    
+    SATGetPtsWithExtremeDots( axisOfMinOverlap, o.transformedPts, meSmall, meLarge ) ;
+    contact2 = o.transformedPts[meLarge] ;
     
     // if overlap occurred in ALL AXES, then they do intersect
     return 1 ;

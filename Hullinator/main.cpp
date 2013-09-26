@@ -190,10 +190,24 @@ bool IS_KEYDOWN( uint16_t vKey )
 void hullHullTest()
 {
   // This is a unit test, so make sure it works both ways
-  if( hull1.intersectsHull( hull2 ) )  hull1.drawDebug( Red ) ;
+  Vector3f pene, contact1, contact2 ;
+  
+  if( hull1.intersectsHull( hull2, pene, contact1, contact2 ) ) {
+    hull1.drawDebug( Vector4f(1,0,0,0.5) ) ;
+    
+    // The hull needs to move back -penetration to clear the tri.
+    hull1.drawDebug( -pene, Vector4f(0,0,1,0.5) ) ;
+    
+    addDebugPoint( contact1, Magenta ) ;
+    addDebugPoint( contact2, Green ) ;
+  }
   else  hull1.drawDebug( Vector4f(0,0,1,0.75) ) ;
 
-  if( hull2.intersectsHull( hull1 ) )  hull2.drawDebug( Purple ) ;
+  if( hull2.intersectsHull( hull1 ) ) {
+    hull2.drawDebug( Purple ) ;
+    
+    hull2.drawDebug( pene, Vector4f(0,0,1,0.5) ) ;
+  }
   else  hull2.drawDebug( Vector4f(0,1,0,0.75) ) ;
   if( showOriginalPoints )
   {
